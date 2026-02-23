@@ -1,6 +1,6 @@
 {
   "job": ["work", "career", "employment"],
-  "work": ["job", "career", "movement"],
+  "work": ["job", "career", "employment"],
   "money": ["funds", "capital", "portfolio", "wallet"],
   "health": ["medical", "blood", "labs", "protocol"],
   "home": ["apartment", "bedroom", "living"],
