@@ -13,10 +13,10 @@ description: >
 
 ```bash
 # Index workspace memory files into SQLite FTS5
-node lib/index.js index [--workspace /path/to/workspace] [--force]
+node lib/index.js index [--workspace /path/to/workspace] [--force] [--include extra.md,other.md]
 
 # Search indexed memory
-node lib/index.js query "what did we decide about X" [--limit 10] [--since 7d]
+node lib/index.js query "search terms" [--limit N] [--since 7d|2w|3m|2026-01-01] [--context N]
 
 # Show index status
 node lib/index.js status [--workspace /path/to/workspace]
@@ -24,9 +24,35 @@ node lib/index.js status [--workspace /path/to/workspace]
 
 ## How it works
 
-1. Scans MEMORY.md, memory/*.md, and any configured markdown paths
-2. Chunks by heading (## / ###) or paragraph breaks
+1. Scans MEMORY.md, SOUL.md, USER.md, TOOLS.md, STATE.md, VOICE.md, IDENTITY.md, and `memory/*.md`
+2. Chunks by heading (## / ###) or paragraph breaks (max ~2000 chars per chunk)
 3. Stores in SQLite FTS5 at `{workspace}/.memory/index.sqlite`
 4. Returns ranked results with file path + line number citations
 
 Incremental by default — only re-indexes files whose mtime changed. Use `--force` for full rebuild.
+
+## Ranking
+
+Results are ranked by three factors:
+- **FTS5 BM25** — keyword relevance
+- **Recency boost** — recent content scores higher (linear decay over 90 days)
+- **File weight** — curated files rank higher (MEMORY.md 1.5x, USER.md 1.3x, daily logs 1.0x)
+
+## Options
+
+- `--since` — temporal filter. Supports: `7d` (days), `2w` (weeks), `3m` (months), `1y` (years), or absolute `2026-01-01`
+- `--context N` — return N adjacent chunks before/after each result for surrounding context
+- `--include` — comma-separated additional file paths to index beyond defaults
+- `--force` — full reindex (ignore mtime cache)
+
+## Custom aliases
+
+Place an `aliases.json` file in `{workspace}/.memory/` to customize query expansion.
+Keys replace defaults (not extend). See `examples/aliases.json` for the format.
+
+```json
+{
+  "job": ["work", "career", "employment"],
+  "crypto": ["defi", "token", "chain", "wallet"]
+}
+```
