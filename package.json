@@ -1,15 +1,17 @@
 {
   "name": "structured-memory-engine",
-  "version": "3.0.0",
-  "description": "Structured memory recall for OpenClaw workspaces via SQLite FTS5",
+  "version": "4.1.0",
+  "description": "Structured memory engine with MCP server for Claude Code — SQLite FTS5",
   "main": "lib/index.js",
   "scripts": {
     "index": "node lib/index.js index",
     "query": "node lib/index.js query",
     "status": "node lib/index.js status",
-    "test": "node test/test-retain.js && node test/test-reflect.js"
+    "mcp": "node lib/mcp-server.js",
+    "test": "node test/test-retain.js && node test/test-reflect.js && node test/test-recall.js && node test/test-indexer.js && node test/test-remember.js && node test/test-mcp.js && node test/test-config.js"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.0",
     "better-sqlite3": "^11.8.1"
   },
   "engines": {

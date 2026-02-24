@@ -80,22 +80,30 @@ console.log('Test 1: Confidence decay');
   db.close();
 }
 
-// ─── Test 2: Reinforcement ───
+// ─── Test 2: Reinforcement (floor-based, idempotent) ───
 console.log('Test 2: Confidence reinforcement');
 {
   const db = createDb();
-  const lowId = insertChunk(db, { confidence: 0.5, accessCount: 10 });
+  // confidence 0.1, accessCount 10 → floor = 0.2, boosted to 0.2
+  const belowFloorId = insertChunk(db, { confidence: 0.1, accessCount: 10 });
+  // confidence 0.5, accessCount 10 → floor = 0.2, stays 0.5 (already above floor)
+  const aboveFloorId = insertChunk(db, { confidence: 0.5, accessCount: 10 });
+  // confidence 0.95, accessCount 25 → floor = 0.5, stays 0.95 (already above floor)
   const highId = insertChunk(db, { confidence: 0.95, accessCount: 25 });
+  // zero accesses → not selected by query
   const zeroId = insertChunk(db, { confidence: 0.3, accessCount: 0 });
 
   const result = reinforceConfidence(db, { dryRun: false });
-  assert(result.reinforced >= 1, `Expected at least 1 reinforced, got ${result.reinforced}`);
+  assert(result.reinforced === 1, `Expected 1 reinforced (only below-floor chunk), got ${result.reinforced}`);
 
-  const low = db.prepare('SELECT confidence FROM chunks WHERE id = ?').get(lowId);
-  assert(low.confidence === 0.7, `Expected 0.5 + 0.2 boost = 0.7, got ${low.confidence}`);
+  const belowFloor = db.prepare('SELECT confidence FROM chunks WHERE id = ?').get(belowFloorId);
+  assert(belowFloor.confidence === 0.2, `Expected floor 0.2, got ${belowFloor.confidence}`);
+
+  const aboveFloor = db.prepare('SELECT confidence FROM chunks WHERE id = ?').get(aboveFloorId);
+  assert(aboveFloor.confidence === 0.5, `Already above floor, should stay 0.5, got ${aboveFloor.confidence}`);
 
   const high = db.prepare('SELECT confidence FROM chunks WHERE id = ?').get(highId);
-  assert(high.confidence === 1.0, `Should cap at 1.0, got ${high.confidence}`);
+  assert(high.confidence === 0.95, `Already above floor, should stay 0.95, got ${high.confidence}`);
 
   const zero = db.prepare('SELECT confidence FROM chunks WHERE id = ?').get(zeroId);
   assert(zero.confidence === 0.3, `Zero accesses should not be reinforced, got ${zero.confidence}`);
@@ -249,6 +257,28 @@ console.log('Test 9: Restore archived chunk');
   // Verify FTS works on restored chunk (INSERT trigger should fire)
   const ftsResult = db.prepare("SELECT * FROM chunks_fts WHERE chunks_fts MATCH '\"restore\"'").all();
   assert(ftsResult.length === 1, `Expected restored chunk searchable via FTS, got ${ftsResult.length}`);
+  db.close();
+}
+
+// ─── Test 10: Reinforcement idempotency ───
+console.log('Test 10: Reinforcement idempotency');
+{
+  const db = createDb();
+  insertChunk(db, { confidence: 0.1, accessCount: 15 });
+  insertChunk(db, { confidence: 0.05, accessCount: 5 });
+
+  const run1 = reinforceConfidence(db, { dryRun: false });
+  const after1 = db.prepare('SELECT id, confidence FROM chunks ORDER BY id').all();
+
+  const run2 = reinforceConfidence(db, { dryRun: false });
+  const after2 = db.prepare('SELECT id, confidence FROM chunks ORDER BY id').all();
+
+  assert(run2.reinforced === 0, `Second run should be a no-op, got ${run2.reinforced} reinforced`);
+  assert(JSON.stringify(after1) === JSON.stringify(after2), 'Confidence values should be identical after two runs');
+
+  // Third run for good measure
+  const run3 = reinforceConfidence(db, { dryRun: false });
+  assert(run3.reinforced === 0, `Third run should also be a no-op, got ${run3.reinforced} reinforced`);
   db.close();
 }
 
