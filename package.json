@@ -1,13 +1,13 @@
 {
   "name": "structured-memory-engine",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "Structured memory recall for OpenClaw workspaces via SQLite FTS5",
   "main": "lib/index.js",
   "scripts": {
     "index": "node lib/index.js index",
     "query": "node lib/index.js query",
     "status": "node lib/index.js status",
-    "test": "node test/test-retain.js"
+    "test": "node test/test-retain.js && node test/test-reflect.js"
   },
   "dependencies": {
     "better-sqlite3": "^11.8.1"

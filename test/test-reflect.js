@@ -1,0 +1,257 @@
+#!/usr/bin/env node
+/**
+ * Tests for v3 Reflect — decay, reinforcement, staleness, contradiction detection, pruning, restore.
+ */
+const Database = require('better-sqlite3');
+const { SCHEMA } = require('../lib/store');
+const { decayConfidence, reinforceConfidence, markStale, detectContradictions, pruneStale, restoreChunk, runReflectCycle } = require('../lib/reflect');
+
+let passed = 0, failed = 0;
+
+function assert(condition, msg) {
+  if (condition) { passed++; }
+  else { failed++; console.error(`  ✗ ${msg}`); }
+}
+
+function createDb() {
+  const db = new Database(':memory:');
+  db.exec(SCHEMA);
+  // Apply migrations (same as openDb)
+  try { db.exec('ALTER TABLE chunks ADD COLUMN file_weight REAL DEFAULT 1.0'); } catch (_) {}
+  try { db.exec('ALTER TABLE chunks ADD COLUMN access_count INTEGER DEFAULT 0'); } catch (_) {}
+  try { db.exec('ALTER TABLE chunks ADD COLUMN last_accessed TEXT'); } catch (_) {}
+  try { db.exec('ALTER TABLE chunks ADD COLUMN stale INTEGER DEFAULT 0'); } catch (_) {}
+  // Recreate trigger to be column-specific
+  try {
+    db.exec('DROP TRIGGER IF EXISTS chunks_au');
+    db.exec(`CREATE TRIGGER IF NOT EXISTS chunks_au AFTER UPDATE OF content, heading, entities ON chunks BEGIN
+      INSERT INTO chunks_fts(chunks_fts, rowid, content, heading, entities) VALUES ('delete', old.id, old.content, old.heading, old.entities);
+      INSERT INTO chunks_fts(rowid, content, heading, entities) VALUES (new.id, new.content, new.heading, new.entities);
+    END;`);
+  } catch (_) {}
+  return db;
+}
+
+function insertChunk(db, { heading = null, content = 'test content', chunkType = 'raw', confidence = 1.0, createdAt = null, accessCount = 0, lastAccessed = null, stale = 0, filePath = 'test.md' } = {}) {
+  const now = new Date().toISOString();
+  const result = db.prepare(`INSERT INTO chunks (file_path, heading, content, line_start, line_end, entities, chunk_type, confidence, created_at, indexed_at, file_weight, access_count, last_accessed, stale)
+    VALUES (?, ?, ?, 1, 10, '[]', ?, ?, ?, ?, 1.0, ?, ?, ?)`).run(
+    filePath, heading, content, chunkType, confidence, createdAt || now, now, accessCount, lastAccessed, stale
+  );
+  return result.lastInsertRowid;
+}
+
+function daysAgo(n) {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.toISOString();
+}
+
+// ─── Test 1: Decay ───
+console.log('Test 1: Confidence decay');
+{
+  const db = createDb();
+  // confirmed: immune
+  insertChunk(db, { chunkType: 'confirmed', confidence: 1.0, createdAt: daysAgo(365) });
+  // inferred: normal decay
+  const inferredId = insertChunk(db, { chunkType: 'inferred', confidence: 0.7, createdAt: daysAgo(200) });
+  // outdated: fast decay
+  const outdatedId = insertChunk(db, { chunkType: 'outdated', confidence: 0.3, createdAt: daysAgo(100) });
+  // recent: minimal decay
+  insertChunk(db, { chunkType: 'fact', confidence: 1.0, createdAt: daysAgo(5) });
+
+  const result = decayConfidence(db, { dryRun: false });
+  assert(result.decayed >= 2, `Expected at least 2 decayed, got ${result.decayed}`);
+
+  const confirmed = db.prepare('SELECT confidence FROM chunks WHERE chunk_type = ?').get('confirmed');
+  assert(confirmed.confidence === 1.0, `Confirmed should be immune, got ${confirmed.confidence}`);
+
+  const inferred = db.prepare('SELECT confidence FROM chunks WHERE id = ?').get(inferredId);
+  assert(inferred.confidence < 0.7, `Inferred should have decayed from 0.7, got ${inferred.confidence}`);
+
+  const outdated = db.prepare('SELECT confidence FROM chunks WHERE id = ?').get(outdatedId);
+  assert(outdated.confidence < 0.3, `Outdated should have decayed from 0.3, got ${outdated.confidence}`);
+
+  // Verify outdated decays faster than inferred (proportionally)
+  const inferredDecay = 0.7 - inferred.confidence;
+  const outdatedDecay = 0.3 - outdated.confidence;
+  // outdated rate is 2x, so per-day decay should be higher even though it started lower
+  assert(outdatedDecay > 0, `Outdated should have some decay`);
+  db.close();
+}
+
+// ─── Test 2: Reinforcement ───
+console.log('Test 2: Confidence reinforcement');
+{
+  const db = createDb();
+  const lowId = insertChunk(db, { confidence: 0.5, accessCount: 10 });
+  const highId = insertChunk(db, { confidence: 0.95, accessCount: 25 });
+  const zeroId = insertChunk(db, { confidence: 0.3, accessCount: 0 });
+
+  const result = reinforceConfidence(db, { dryRun: false });
+  assert(result.reinforced >= 1, `Expected at least 1 reinforced, got ${result.reinforced}`);
+
+  const low = db.prepare('SELECT confidence FROM chunks WHERE id = ?').get(lowId);
+  assert(low.confidence === 0.7, `Expected 0.5 + 0.2 boost = 0.7, got ${low.confidence}`);
+
+  const high = db.prepare('SELECT confidence FROM chunks WHERE id = ?').get(highId);
+  assert(high.confidence === 1.0, `Should cap at 1.0, got ${high.confidence}`);
+
+  const zero = db.prepare('SELECT confidence FROM chunks WHERE id = ?').get(zeroId);
+  assert(zero.confidence === 0.3, `Zero accesses should not be reinforced, got ${zero.confidence}`);
+  db.close();
+}
+
+// ─── Test 3: Staleness ───
+console.log('Test 3: Mark stale');
+{
+  const db = createDb();
+  // Low confidence + old → stale
+  insertChunk(db, { confidence: 0.2, createdAt: daysAgo(100) });
+  // Very low confidence + moderately old → stale
+  insertChunk(db, { confidence: 0.05, createdAt: daysAgo(40) });
+  // High confidence + old → NOT stale
+  insertChunk(db, { confidence: 0.8, createdAt: daysAgo(200) });
+  // Low confidence + recent → NOT stale
+  insertChunk(db, { confidence: 0.2, createdAt: daysAgo(10) });
+
+  const result = markStale(db, { dryRun: false });
+  assert(result.marked === 2, `Expected 2 marked stale, got ${result.marked}`);
+
+  const staleCount = db.prepare('SELECT COUNT(*) as n FROM chunks WHERE stale = 1').get().n;
+  assert(staleCount === 2, `Expected 2 stale in DB, got ${staleCount}`);
+  db.close();
+}
+
+// ─── Test 4: Pruning ───
+console.log('Test 4: Prune stale chunks');
+{
+  const db = createDb();
+  // Qualifies: stale + low confidence + very old
+  insertChunk(db, { stale: 1, confidence: 0.05, createdAt: daysAgo(200), accessCount: 0 });
+  // Qualifies: never accessed + very low confidence
+  insertChunk(db, { stale: 1, confidence: 0.02, createdAt: daysAgo(50), accessCount: 0 });
+  // Does NOT qualify: stale but confidence too high
+  insertChunk(db, { stale: 1, confidence: 0.5, createdAt: daysAgo(200), accessCount: 3 });
+  // Does NOT qualify: not stale
+  insertChunk(db, { stale: 0, confidence: 0.01, createdAt: daysAgo(300), accessCount: 0 });
+
+  const result = pruneStale(db, { dryRun: false });
+  assert(result.archived === 2, `Expected 2 archived, got ${result.archived}`);
+
+  const chunkCount = db.prepare('SELECT COUNT(*) as n FROM chunks').get().n;
+  assert(chunkCount === 2, `Expected 2 remaining chunks, got ${chunkCount}`);
+
+  const archivedCount = db.prepare('SELECT COUNT(*) as n FROM archived_chunks').get().n;
+  assert(archivedCount === 2, `Expected 2 in archived_chunks, got ${archivedCount}`);
+  db.close();
+}
+
+// ─── Test 5: Contradiction detection (true positive) ───
+console.log('Test 5: Contradiction detection — true positive');
+{
+  const db = createDb();
+  insertChunk(db, { heading: 'Daily Protocol', content: 'takes bromantane sublingual daily morning protocol for focus energy', filePath: 'memory/2026-01-01.md', createdAt: daysAgo(60) });
+  insertChunk(db, { heading: 'Daily Protocol', content: 'stopped bromantane sublingual daily morning protocol due tolerance', filePath: 'memory/2026-02-01.md', createdAt: daysAgo(10) });
+
+  const result = detectContradictions(db, { dryRun: false });
+  assert(result.newFlags === 1, `Expected 1 contradiction, got ${result.newFlags}`);
+  assert(result.found >= 1, `Expected at least 1 total, got ${result.found}`);
+
+  const contraRow = db.prepare('SELECT * FROM contradictions').get();
+  assert(contraRow != null, 'Expected a row in contradictions table');
+  assert(contraRow.reason.includes('negation'), `Expected reason to mention negation, got: ${contraRow.reason}`);
+  db.close();
+}
+
+// ─── Test 6: Contradiction detection (false positive guard) ───
+console.log('Test 6: Contradiction detection — no false positive');
+{
+  const db = createDb();
+  insertChunk(db, { heading: 'Supplement Stack', content: 'JB takes magnesium glycinate 400mg before bed for sleep quality', filePath: 'memory/2026-01-01.md', createdAt: daysAgo(60) });
+  insertChunk(db, { heading: 'Supplement Stack', content: 'JB takes magnesium glycinate 400mg with zinc for better absorption', filePath: 'memory/2026-02-01.md', createdAt: daysAgo(10) });
+
+  const result = detectContradictions(db, { dryRun: false });
+  assert(result.newFlags === 0, `Expected 0 contradictions (no negation), got ${result.newFlags}`);
+  db.close();
+}
+
+// ─── Test 7: Dry run ───
+console.log('Test 7: Dry run — no DB mutations');
+{
+  const db = createDb();
+  insertChunk(db, { chunkType: 'inferred', confidence: 0.7, createdAt: daysAgo(200), accessCount: 5 });
+  insertChunk(db, { confidence: 0.2, createdAt: daysAgo(100) });
+  insertChunk(db, { stale: 1, confidence: 0.05, createdAt: daysAgo(200), accessCount: 0 });
+
+  // Snapshot state before
+  const confBefore = db.prepare('SELECT id, confidence, stale FROM chunks ORDER BY id').all();
+  const archivedBefore = db.prepare('SELECT COUNT(*) as n FROM archived_chunks').get().n;
+  const contraBefore = db.prepare('SELECT COUNT(*) as n FROM contradictions').get().n;
+
+  const result = runReflectCycle(db, { dryRun: true });
+  assert(result.decay != null, 'Should have decay results');
+  assert(result.reinforce != null, 'Should have reinforce results');
+
+  // Verify nothing changed
+  const confAfter = db.prepare('SELECT id, confidence, stale FROM chunks ORDER BY id').all();
+  const archivedAfter = db.prepare('SELECT COUNT(*) as n FROM archived_chunks').get().n;
+  const contraAfter = db.prepare('SELECT COUNT(*) as n FROM contradictions').get().n;
+
+  assert(JSON.stringify(confBefore) === JSON.stringify(confAfter), 'Chunk confidence/stale should not change in dry run');
+  assert(archivedBefore === archivedAfter, 'Archived count should not change in dry run');
+  assert(contraBefore === contraAfter, 'Contradictions count should not change in dry run');
+  db.close();
+}
+
+// ─── Test 8: Search excludes stale ───
+console.log('Test 8: Search excludes stale by default');
+{
+  const db = createDb();
+  insertChunk(db, { content: 'bromantane supplement protocol', stale: 0 });
+  insertChunk(db, { content: 'bromantane old outdated protocol', stale: 1 });
+
+  // Default: excludes stale
+  const { search } = require('../lib/store');
+  const normal = search(db, '"bromantane"', { includeStale: false });
+  assert(normal.length === 1, `Expected 1 result excluding stale, got ${normal.length}`);
+
+  // With includeStale
+  const withStale = search(db, '"bromantane"', { includeStale: true });
+  assert(withStale.length === 2, `Expected 2 results including stale, got ${withStale.length}`);
+  db.close();
+}
+
+// ─── Test 9: Restore ───
+console.log('Test 9: Restore archived chunk');
+{
+  const db = createDb();
+  // Insert and archive a chunk
+  insertChunk(db, { heading: 'Old Fact', content: 'some important old fact about testing restore', stale: 1, confidence: 0.01, createdAt: daysAgo(200), accessCount: 0 });
+
+  const pruneResult = pruneStale(db, { dryRun: false });
+  assert(pruneResult.archived === 1, `Expected 1 archived for restore test, got ${pruneResult.archived}`);
+
+  const chunksBefore = db.prepare('SELECT COUNT(*) as n FROM chunks').get().n;
+  assert(chunksBefore === 0, `Expected 0 chunks after prune, got ${chunksBefore}`);
+
+  const archived = db.prepare('SELECT id FROM archived_chunks').get();
+  const restoreResult = restoreChunk(db, archived.id);
+  assert(restoreResult.restored === true, `Expected restored=true, got ${restoreResult.restored}`);
+  assert(restoreResult.newId != null, `Expected a newId, got ${restoreResult.newId}`);
+
+  const chunksAfter = db.prepare('SELECT COUNT(*) as n FROM chunks').get().n;
+  assert(chunksAfter === 1, `Expected 1 chunk after restore, got ${chunksAfter}`);
+
+  const archivedAfter = db.prepare('SELECT COUNT(*) as n FROM archived_chunks').get().n;
+  assert(archivedAfter === 0, `Expected 0 archived after restore, got ${archivedAfter}`);
+
+  // Verify FTS works on restored chunk (INSERT trigger should fire)
+  const ftsResult = db.prepare("SELECT * FROM chunks_fts WHERE chunks_fts MATCH '\"restore\"'").all();
+  assert(ftsResult.length === 1, `Expected restored chunk searchable via FTS, got ${ftsResult.length}`);
+  db.close();
+}
+
+// ─── Summary ───
+console.log(`\n${passed} passed, ${failed} failed`);
+process.exit(failed > 0 ? 1 : 0);

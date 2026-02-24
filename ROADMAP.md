@@ -34,19 +34,26 @@ Convention-based fact extraction from tagged markdown. Zero LLM calls, zero cost
 
 ---
 
-## v3 — Reflect (planned)
-Periodic synthesis and belief management. The system reviews its own knowledge and evolves.
+## v3 — Reflect (shipped)
+Memory lifecycle management. Rule-based, zero LLM calls, zero ongoing cost.
 
-- Scheduled reflection jobs (daily or weekly)
-- Entity page generation — auto-maintain summary pages per entity (people, projects, protocols)
-- Opinion evolution — track confidence over time with evidence links (supporting + contradicting facts)
-- Contradiction detection — flag when new facts conflict with existing beliefs
-- Staleness decay — reduce confidence on facts that haven't been reinforced
-- Pruning — archive superseded facts, compress redundant entries
-- Core memory promotion — surface frequently-accessed facts for inclusion in always-loaded context
-- `access_count` and `last_accessed` tracking activated
+### Shipped:
+- Confidence decay — time-based decay with type-specific rates (`confirmed` immune, `outdated` 2x faster)
+- Access-based reinforcement — frequently-accessed chunks get confidence boost (capped at 1.0)
+- Staleness detection — low confidence + old age → marked stale, excluded from search by default
+- Contradiction detection — same heading + shared terms + negation signal → flagged
+- Archival pruning — stale + very low confidence → moved to `archived_chunks` (never deleted)
+- Restore command — recover any archived chunk back to active index
+- Access tracking activated — `access_count` + `last_accessed` updated on every search hit
+- Column-specific FTS trigger — prevents index churn on metadata-only updates
+- Dry-run mode — preview all changes without modifying database
+- `--include-stale` flag for search — opt-in to see stale results
 
-**Key challenge:** Reflection quality requires strong reasoning (contradiction detection, confidence calibration). Planned approach: local LLM for routine maintenance, API model (Sonnet-class) for weekly deep reflection.
+### Future (v3.x):
+- Scheduled reflection jobs (cron/daily)
+- Entity page generation — auto-maintain summary pages per entity
+- Opinion evolution — track confidence over time with evidence links
+- Core memory promotion — surface frequently-accessed facts for always-loaded context
 
 ---
 

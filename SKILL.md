@@ -69,12 +69,80 @@ node lib/index.js query "lighting" --type preference --min-confidence 0.7
 
 Confidence affects ranking: `[outdated?]` items (0.3) naturally rank lower than `[confirmed]` items (1.0).
 
+## v3 Reflect — Memory Lifecycle Management
+
+Periodic reflection cycle that maintains memory health: confidence decay, access-based reinforcement, staleness detection, contradiction flagging, and archival pruning. All rule-based, zero LLM calls.
+
+```bash
+# Run full reflect cycle (decay → reinforce → stale → contradictions → prune)
+node lib/index.js reflect [--workspace PATH] [--dry-run]
+
+# View flagged contradictions
+node lib/index.js contradictions [--workspace PATH] [--unresolved]
+
+# View archived (pruned) chunks
+node lib/index.js archived [--workspace PATH] [--limit N]
+
+# Restore an archived chunk back to active
+node lib/index.js restore <chunk-id> [--workspace PATH]
+```
+
+### How it works
+
+1. **Decay** — Confidence decreases over time based on chunk type. `confirmed` chunks are immune. `outdated` decays 2x faster.
+2. **Reinforce** — Chunks accessed frequently get a confidence boost (capped at 1.0).
+3. **Stale** — Chunks with low confidence + old age get marked stale. Stale chunks are excluded from search by default.
+4. **Contradictions** — Chunks with the same heading, 3+ shared terms, and negation signals are flagged.
+5. **Prune** — Stale chunks with very low confidence are archived (never deleted). Restorable via `restore`.
+
+### Flags
+
+- `--dry-run` — Show what would change without modifying the database
+- `--unresolved` — Show only unresolved contradictions
+- `--include-stale` — Include stale chunks in query results
+
 ## Options
 
 - `--since` — temporal filter. Supports: `7d` (days), `2w` (weeks), `3m` (months), `1y` (years), or absolute `2026-01-01`
 - `--context N` — return N adjacent chunks before/after each result for surrounding context
 - `--include` — comma-separated additional file paths to index beyond defaults
 - `--force` — full reindex (ignore mtime cache)
+
+## v3 Reflect — Memory Lifecycle Management
+
+Automatic confidence decay, reinforcement, staleness detection, contradiction flagging, and archival pruning. All rule-based, zero LLM calls.
+
+```bash
+# Run full reflect cycle (decay → reinforce → stale → contradictions → prune)
+node lib/index.js reflect [--workspace PATH] [--dry-run]
+
+# View contradictions
+node lib/index.js contradictions [--unresolved] [--limit N]
+
+# View archived (pruned) chunks
+node lib/index.js archived [--limit N]
+
+# Restore an archived chunk back to active
+node lib/index.js restore <chunk-id>
+
+# Include stale chunks in search results
+node lib/index.js query "search terms" --include-stale
+```
+
+### How it works
+
+- **Decay**: Confidence decreases over time based on chunk type. `confirmed` is immune. `outdated` decays 2x faster. Rate: `(daysSinceAccess / 365) * rate * 0.5`.
+- **Reinforce**: Frequently accessed chunks get a confidence boost: `min(0.5, access_count * 0.02)`, capped at 1.0.
+- **Stale**: Chunks with `confidence < 0.3 AND age > 90d` or `confidence < 0.1 AND age > 30d` are marked stale. Stale chunks are excluded from search by default.
+- **Contradictions**: Same-heading chunks from different files/dates with 3+ shared terms and a negation signal are flagged.
+- **Prune**: Stale chunks with `confidence < 0.1 AND age > 180d` or `access_count = 0 AND confidence < 0.05` are moved to `archived_chunks`.
+- **Restore**: Archived chunks can be recovered via `restore <id>`.
+
+### Flags
+
+- `--dry-run` — compute all changes but don't write to DB
+- `--unresolved` — only show unresolved contradictions
+- `--include-stale` — include stale chunks in query results
 
 ## Custom aliases
 
