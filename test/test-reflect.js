@@ -282,6 +282,32 @@ console.log('Test 10: Reinforcement idempotency');
   db.close();
 }
 
+// ─── Test 11: Generic headings skipped in contradiction detection ───
+console.log('Test 11: Generic headings skipped in contradiction detection');
+{
+  const db = createDb();
+  // "Overview" is a generic heading — should NOT trigger contradiction even with negation + shared terms
+  insertChunk(db, { heading: 'Overview', content: 'project uses bromantane protocol daily morning routine for focus energy', filePath: 'agents/alpha.md', createdAt: daysAgo(60) });
+  insertChunk(db, { heading: 'Overview', content: 'project stopped bromantane protocol daily morning routine due tolerance', filePath: 'agents/beta.md', createdAt: daysAgo(10) });
+
+  const result = detectContradictions(db, { dryRun: false });
+  assert(result.newFlags === 0, `Expected 0 contradictions for generic heading "Overview", got ${result.newFlags}`);
+  db.close();
+}
+
+// ─── Test 12: Near-duplicate divergence check ───
+console.log('Test 12: Near-duplicate chunks not flagged as contradictions');
+{
+  const db = createDb();
+  // Nearly identical content with a negation word — should be caught by divergence check
+  insertChunk(db, { heading: 'Daily Protocol', content: 'takes bromantane sublingual daily morning protocol focus energy stack', filePath: 'memory/2026-01-01.md', createdAt: daysAgo(60) });
+  insertChunk(db, { heading: 'Daily Protocol', content: 'not takes bromantane sublingual daily morning protocol focus energy stack', filePath: 'memory/2026-02-01.md', createdAt: daysAgo(10) });
+
+  const result = detectContradictions(db, { dryRun: false });
+  assert(result.newFlags === 0, `Expected 0 for near-duplicate with high overlap, got ${result.newFlags}`);
+  db.close();
+}
+
 // ─── Summary ───
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

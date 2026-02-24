@@ -112,6 +112,58 @@ console.log('Test 7: Deduplicates paths');
   fs.rmSync(ws, { recursive: true });
 }
 
+// --- Test 8: Resolves dir/*/subdir/*.md nested patterns ---
+console.log('Test 8: Resolves dir/*/subdir/*.md nested patterns');
+{
+  const ws = tmpWorkspace();
+  // tools/nightly-builds/report.md and tools/research/analysis.md
+  fs.mkdirSync(path.join(ws, 'tools', 'nightly-builds'), { recursive: true });
+  fs.mkdirSync(path.join(ws, 'tools', 'research'), { recursive: true });
+  fs.writeFileSync(path.join(ws, 'tools', 'nightly-builds', 'report.md'), '# Report', 'utf-8');
+  fs.writeFileSync(path.join(ws, 'tools', 'research', 'analysis.md'), '# Analysis', 'utf-8');
+  fs.writeFileSync(path.join(ws, 'tools', 'research', 'ignore.txt'), 'not md', 'utf-8');
+  const config = { ...DEFAULTS, includeGlobs: ['tools/*/*.md'] };
+  const resolved = resolveIncludes(ws, config);
+  assert(resolved.length === 2, `Expected 2 nested .md files, got ${resolved.length}`);
+  const names = resolved.map(p => path.basename(p)).sort();
+  assert(names[0] === 'analysis.md', `Expected analysis.md, got ${names[0]}`);
+  assert(names[1] === 'report.md', `Expected report.md, got ${names[1]}`);
+  fs.rmSync(ws, { recursive: true });
+}
+
+// --- Test 9: Resolves dir/**/*.md recursive patterns ---
+console.log('Test 9: Resolves dir/**/*.md recursive patterns');
+{
+  const ws = tmpWorkspace();
+  fs.mkdirSync(path.join(ws, 'docs', 'guides', 'advanced'), { recursive: true });
+  fs.writeFileSync(path.join(ws, 'docs', 'top.md'), '# Top', 'utf-8');
+  fs.writeFileSync(path.join(ws, 'docs', 'guides', 'intro.md'), '# Intro', 'utf-8');
+  fs.writeFileSync(path.join(ws, 'docs', 'guides', 'advanced', 'deep.md'), '# Deep', 'utf-8');
+  const config = { ...DEFAULTS, includeGlobs: ['docs/**/*.md'] };
+  const resolved = resolveIncludes(ws, config);
+  assert(resolved.length === 3, `Expected 3 recursive .md files, got ${resolved.length}`);
+  const names = resolved.map(p => path.basename(p)).sort();
+  assert(names.includes('top.md'), 'Should include top-level file');
+  assert(names.includes('intro.md'), 'Should include mid-level file');
+  assert(names.includes('deep.md'), 'Should include deeply nested file');
+  fs.rmSync(ws, { recursive: true });
+}
+
+// --- Test 10: Mixed patterns in single config ---
+console.log('Test 10: Mixed patterns — include + flat glob + nested glob');
+{
+  const ws = tmpWorkspace();
+  fs.writeFileSync(path.join(ws, 'ROOT.md'), '# Root', 'utf-8');
+  fs.mkdirSync(path.join(ws, 'agents'));
+  fs.writeFileSync(path.join(ws, 'agents', 'bot.md'), '# Bot', 'utf-8');
+  fs.mkdirSync(path.join(ws, 'tools', 'logs'), { recursive: true });
+  fs.writeFileSync(path.join(ws, 'tools', 'logs', 'build.md'), '# Build', 'utf-8');
+  const config = { ...DEFAULTS, include: ['ROOT.md'], includeGlobs: ['agents/*.md', 'tools/*/*.md'] };
+  const resolved = resolveIncludes(ws, config);
+  assert(resolved.length === 3, `Expected 3 total files, got ${resolved.length}`);
+  fs.rmSync(ws, { recursive: true });
+}
+
 // --- Summary ---
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

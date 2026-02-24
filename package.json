@@ -1,6 +1,6 @@
 {
   "name": "structured-memory-engine",
-  "version": "4.1.0",
+  "version": "4.1.1",
   "description": "Structured memory engine with MCP server for Claude Code — SQLite FTS5",
   "main": "lib/index.js",
   "scripts": {
