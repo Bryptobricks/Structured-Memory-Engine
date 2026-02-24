@@ -38,6 +38,37 @@ Results are ranked by three factors:
 - **Recency boost** — recent content scores higher (linear decay over 90 days)
 - **File weight** — curated files rank higher (MEMORY.md 1.5x, USER.md 1.3x, daily logs 1.0x)
 
+## v2 Retain — Structured Fact Extraction
+
+Tag markdown content for structured extraction with confidence scoring:
+
+```
+[fact] JB takes bromantane 25mg sublingual daily        → type: fact, confidence: 1.0
+[decision] FTS5 over vector DB for v1                   → type: decision, confidence: 1.0
+[pref] No over-engineering, minimum complexity           → type: preference, confidence: 1.0
+[confirmed] JB's height is 6'5"                         → type: fact, confidence: 1.0
+[opinion] Bromantane is better than Adderall             → type: opinion, confidence: 0.8
+[inferred] JB prefers warm lighting                     → type: fact, confidence: 0.7
+[outdated?] JB takes 1.75mg retatrutide                 → type: fact, confidence: 0.3
+```
+
+Untagged bullets under `## Decisions`, `## Facts`, `## Preferences`, `## Learned`, `## Open Questions` headings are auto-classified (confidence: 0.9).
+
+### Query Filters
+
+```bash
+# Filter by type
+node lib/index.js query "bromantane" --type fact
+
+# Filter by minimum confidence (excludes outdated/low-confidence)
+node lib/index.js query "bromantane" --min-confidence 0.5
+
+# Combine filters
+node lib/index.js query "lighting" --type preference --min-confidence 0.7
+```
+
+Confidence affects ranking: `[outdated?]` items (0.3) naturally rank lower than `[confirmed]` items (1.0).
+
 ## Options
 
 - `--since` — temporal filter. Supports: `7d` (days), `2w` (weeks), `3m` (months), `1y` (years), or absolute `2026-01-01`
