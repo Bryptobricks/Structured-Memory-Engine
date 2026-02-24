@@ -57,6 +57,30 @@ Memory lifecycle management. Rule-based, zero LLM calls, zero ongoing cost.
 
 ---
 
+## v4 — Reach
+MCP server for Claude Code. First write-path (sme_remember).
+
+### v4.0 (shipped):
+- MCP stdio server with 5 tools: sme_query, sme_remember, sme_index, sme_reflect, sme_status
+- New remember module — write tagged facts to daily memory logs
+- Auto-reindex after remember (mtime-based, only changed file reindexed)
+- Workspace configurable via SME_WORKSPACE env var
+
+### v4.1 — Config + Wider Discovery + Hooks (shipped):
+- Config file (`{workspace}/.memory/config.json`) — owner name, explicit includes, glob patterns
+- Wider file discovery — CLAUDE.md, agents/*.md, skills/*.md, plans/*.md now indexable via config
+- Auto-index on MCP server startup — index is fresh when Claude Code connects
+- One-shot hook script (`bin/sme-hook.js`) — `index` and `reflect` commands for session lifecycle hooks
+- Owner-personalized tool descriptions — `config.owner` drives "Search JB's memory..." vs generic
+- Zero changes to core modules (store, indexer, recall, retain, reflect)
+
+### Future (v4.x):
+- sme_contradictions tool
+- sme_entity tool (entity-centric search)
+- Context window parameter for sme_query
+
+---
+
 ## Design principles (all versions)
 
 1. **Markdown is always source of truth** — the SQLite index is derived and rebuildable
