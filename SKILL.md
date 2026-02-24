@@ -46,10 +46,10 @@ Tag markdown content for structured extraction with confidence scoring:
 [fact] JB takes bromantane 25mg sublingual daily        → type: fact, confidence: 1.0
 [decision] FTS5 over vector DB for v1                   → type: decision, confidence: 1.0
 [pref] No over-engineering, minimum complexity           → type: preference, confidence: 1.0
-[confirmed] JB's height is 6'5"                         → type: fact, confidence: 1.0
+[confirmed] JB's height is 6'5"                         → type: confirmed, confidence: 1.0
 [opinion] Bromantane is better than Adderall             → type: opinion, confidence: 0.8
-[inferred] JB prefers warm lighting                     → type: fact, confidence: 0.7
-[outdated?] JB takes 1.75mg retatrutide                 → type: fact, confidence: 0.3
+[inferred] JB prefers warm lighting                     → type: inferred, confidence: 0.7
+[outdated?] JB takes 1.75mg retatrutide                 → type: outdated, confidence: 0.3
 ```
 
 Untagged bullets under `## Decisions`, `## Facts`, `## Preferences`, `## Learned`, `## Open Questions` headings are auto-classified (confidence: 0.9).

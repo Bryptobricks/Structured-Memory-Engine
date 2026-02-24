@@ -6,7 +6,8 @@
   "scripts": {
     "index": "node lib/index.js index",
     "query": "node lib/index.js query",
-    "status": "node lib/index.js status"
+    "status": "node lib/index.js status",
+    "test": "node test/test-retain.js"
   },
   "dependencies": {
     "better-sqlite3": "^11.8.1"
