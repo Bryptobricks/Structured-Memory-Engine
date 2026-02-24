@@ -25,7 +25,8 @@ try {
     const config = loadConfig(workspace);
     const extras = resolveIncludes(workspace, config);
     const include = extras.map(p => path.relative(workspace, p));
-    const result = indexWorkspace(db, workspace, { include });
+    const fileTypeDefaults = config.fileTypeDefaults || {};
+    const result = indexWorkspace(db, workspace, { include, fileTypeDefaults });
     log(`Indexed: ${result.indexed} | Skipped: ${result.skipped} | Total: ${result.total}`);
   } else if (command === 'reflect') {
     const result = runReflectCycle(db);

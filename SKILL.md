@@ -1,121 +1,91 @@
 ---
 name: structured-memory-engine
 description: >
-  Structured memory recall for OpenClaw workspaces. Indexes markdown memory files
-  (MEMORY.md, memory/*.md) into SQLite FTS5 for fast, cited search.
-  Use when needing to recall past decisions, facts, preferences, or context from
-  workspace memory files. Layers on top of existing memory — does not replace markdown files.
+  Structured memory system for AI workspaces. Indexes markdown memory files into SQLite FTS5
+  for fast, cited search. Extracts structured facts, maintains memory health, and provides
+  an MCP server with live search + write-path for Claude Code integration.
 ---
 
 # Structured Memory Engine
 
-## Commands
+## MCP Tools (v4)
+
+When running as an MCP server (`node lib/mcp-server.js`), exposes:
+
+- `sme_query` — Search memory. Supports `query`, `limit`, `since`, `type`, `minConfidence`, `includeStale`.
+- `sme_remember` — Save a fact/decision/preference to today's memory log. Auto-indexed.
+- `sme_index` — Re-index workspace. Use `force: true` for full rebuild.
+- `sme_reflect` — Run maintenance: decay, reinforce, stale detection, contradictions, prune. Use `dryRun: true` to preview.
+- `sme_status` — Index statistics.
+
+## CLI Commands
 
 ```bash
-# Index workspace memory files into SQLite FTS5
-node lib/index.js index [--workspace /path/to/workspace] [--force] [--include extra.md,other.md]
+# Index workspace memory files
+node lib/index.js index [--workspace PATH] [--force] [--include extra.md,other.md]
 
 # Search indexed memory
-node lib/index.js query "search terms" [--limit N] [--since 7d|2w|3m|2026-01-01] [--context N]
+node lib/index.js query "search terms" [--limit N] [--since 7d|2w|3m|2026-01-01]
+                                        [--context N] [--type fact|confirmed|inferred|...]
+                                        [--min-confidence 0.5] [--include-stale]
 
 # Show index status
-node lib/index.js status [--workspace /path/to/workspace]
+node lib/index.js status [--workspace PATH]
+
+# Memory maintenance
+node lib/index.js reflect [--workspace PATH] [--dry-run]
+node lib/index.js contradictions [--workspace PATH] [--unresolved]
+node lib/index.js archived [--workspace PATH] [--limit N]
+node lib/index.js restore <chunk-id> [--workspace PATH]
 ```
 
-## How it works
+## Configuration
 
-1. Scans MEMORY.md, SOUL.md, USER.md, TOOLS.md, STATE.md, VOICE.md, IDENTITY.md, and `memory/*.md`
-2. Chunks by heading (## / ###) or paragraph breaks (max ~2000 chars per chunk)
-3. Stores in SQLite FTS5 at `{workspace}/.memory/index.sqlite`
-4. Returns ranked results with file path + line number citations
+Config file: `{workspace}/.memory/config.json`
 
-Incremental by default — only re-indexes files whose mtime changed. Use `--force` for full rebuild.
-
-## Ranking
-
-Results are ranked by three factors:
-- **FTS5 BM25** — keyword relevance
-- **Recency boost** — recent content scores higher (linear decay over 90 days)
-- **File weight** — curated files rank higher (MEMORY.md 1.5x, USER.md 1.3x, daily logs 1.0x)
-
-## v2 Retain — Structured Fact Extraction
-
-Tag markdown content for structured extraction with confidence scoring:
-
+```json
+{
+  "owner": "JB",
+  "include": ["CLAUDE.md", "TOOLS.md"],
+  "includeGlobs": ["agents/*.md", "skills/*.md", "plans/*.md"],
+  "fileTypeDefaults": {
+    "MEMORY.md": "confirmed",
+    "USER.md": "confirmed",
+    "memory/*.md": "fact",
+    "plans/*.md": "inferred"
+  }
+}
 ```
-[fact] JB takes bromantane 25mg sublingual daily        → type: fact, confidence: 1.0
-[decision] FTS5 over vector DB for v1                   → type: decision, confidence: 1.0
-[pref] No over-engineering, minimum complexity           → type: preference, confidence: 1.0
-[confirmed] JB's height is 6'5"                         → type: confirmed, confidence: 1.0
-[opinion] Bromantane is better than Adderall             → type: opinion, confidence: 0.8
-[inferred] JB prefers warm lighting                     → type: inferred, confidence: 0.7
-[outdated?] JB takes 1.75mg retatrutide                 → type: outdated, confidence: 0.3
+
+- `owner` — Personalizes MCP tool descriptions
+- `include` — Explicit file paths to index beyond defaults
+- `includeGlobs` — Glob patterns for additional files
+- `fileTypeDefaults` — Map file patterns to chunk types (activates confidence system without inline tags)
+
+## Fact Tagging
+
+```markdown
+[fact] Content here        → type: fact, confidence: 1.0
+[decision] Content here    → type: decision, confidence: 1.0
+[pref] Content here        → type: preference, confidence: 1.0
+[confirmed] Content here   → type: confirmed, confidence: 1.0
+[opinion] Content here     → type: opinion, confidence: 0.8
+[inferred] Content here    → type: inferred, confidence: 0.7
+[outdated?] Content here   → type: outdated, confidence: 0.3
 ```
 
 Untagged bullets under `## Decisions`, `## Facts`, `## Preferences`, `## Learned`, `## Open Questions` headings are auto-classified (confidence: 0.9).
 
-### Query Filters
+## Session Hooks
+
+For auto-index on session start and reflect on session end:
 
 ```bash
-# Filter by type
-node lib/index.js query "bromantane" --type fact
+# Index hook (session start)
+node bin/sme-hook.js index
 
-# Filter by minimum confidence (excludes outdated/low-confidence)
-node lib/index.js query "bromantane" --min-confidence 0.5
-
-# Combine filters
-node lib/index.js query "lighting" --type preference --min-confidence 0.7
+# Reflect hook (session end)
+node bin/sme-hook.js reflect
 ```
 
-Confidence affects ranking: `[outdated?]` items (0.3) naturally rank lower than `[confirmed]` items (1.0).
-
-## v3 Reflect — Memory Lifecycle Management
-
-Periodic reflection cycle that maintains memory health: confidence decay, access-based reinforcement, staleness detection, contradiction flagging, and archival pruning. All rule-based, zero LLM calls.
-
-```bash
-# Run full reflect cycle (decay → reinforce → stale → contradictions → prune)
-node lib/index.js reflect [--workspace PATH] [--dry-run]
-
-# View flagged contradictions
-node lib/index.js contradictions [--workspace PATH] [--unresolved]
-
-# View archived (pruned) chunks
-node lib/index.js archived [--workspace PATH] [--limit N]
-
-# Restore an archived chunk back to active
-node lib/index.js restore <chunk-id> [--workspace PATH]
-```
-
-### How it works
-
-1. **Decay** — Confidence decreases over time based on chunk type. `confirmed` chunks are immune. `outdated` decays 2x faster.
-2. **Reinforce** — Chunks accessed frequently get a confidence boost (capped at 1.0).
-3. **Stale** — Chunks with low confidence + old age get marked stale. Stale chunks are excluded from search by default.
-4. **Contradictions** — Chunks with the same heading, 3+ shared terms, and negation signals are flagged.
-5. **Prune** — Stale chunks with very low confidence are archived (never deleted). Restorable via `restore`.
-
-### Flags
-
-- `--dry-run` — Show what would change without modifying the database
-- `--unresolved` — Show only unresolved contradictions
-- `--include-stale` — Include stale chunks in query results
-
-## Options
-
-- `--since` — temporal filter. Supports: `7d` (days), `2w` (weeks), `3m` (months), `1y` (years), or absolute `2026-01-01`
-- `--context N` — return N adjacent chunks before/after each result for surrounding context
-- `--include` — comma-separated additional file paths to index beyond defaults
-- `--force` — full reindex (ignore mtime cache)
-
-## Custom aliases
-
-Place an `aliases.json` file in `{workspace}/.memory/` to customize query expansion.
-Keys replace defaults (not extend). See `examples/aliases.json` for the format.
-
-```json
-{
-  "job": ["work", "career", "employment"],
-  "crypto": ["defi", "token", "chain", "wallet"]
-}
-```
+Set `SME_WORKSPACE` env var to override the default workspace (`~/.claude`).

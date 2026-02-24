@@ -9,33 +9,163 @@ SQLite FTS5-powered memory system for AI workspaces. Indexes markdown memory fil
 | **Recall** | v1 | Full-text search over markdown files with ranked results and citations |
 | **Retain** | v2 | Convention-based fact extraction with confidence scoring |
 | **Reflect** | v3 | Memory lifecycle — decay, reinforcement, staleness, contradiction detection, pruning |
+| **Reach** | v4 | MCP server for Claude Code — live search, write-path, config, file-level type defaults |
 
-## Quick start
+## Setup on a new device
+
+### 1. Clone and install
 
 ```bash
+git clone https://github.com/chainseeker44/Structured-Memory-Engine.git
+cd Structured-Memory-Engine
 npm install
-
-# Index a workspace
-node lib/index.js index --workspace /path/to/workspace
-
-# Search
-node lib/index.js query "search terms"
-
-# Run memory maintenance
-node lib/index.js reflect --dry-run
 ```
 
-## How it works
+### 2. Create workspace config
 
-1. Scans markdown files: `MEMORY.md`, `USER.md`, `SOUL.md`, `TOOLS.md`, `STATE.md`, `VOICE.md`, `IDENTITY.md`, `memory/*.md`
-2. Chunks by heading or paragraph break (~2000 char max per chunk)
-3. Extracts tagged facts with confidence scores (`[confirmed]` = 1.0, `[inferred]` = 0.7, `[outdated?]` = 0.3)
-4. Stores everything in SQLite FTS5 at `{workspace}/.memory/index.sqlite`
-5. Returns ranked results: BM25 relevance x recency boost x file weight x confidence
+Create `{workspace}/.memory/config.json` (default workspace is `~/.claude`):
 
-Incremental by default — only re-indexes files whose mtime changed.
+```bash
+mkdir -p ~/.claude/.memory
+cp examples/config.json ~/.claude/.memory/config.json
+# Edit to match your workspace structure
+```
 
-## Commands
+See [examples/config.json](examples/config.json) for a complete reference config.
+
+### 3. Register as MCP server in Claude Code
+
+Add to `~/.claude/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "sme": {
+      "command": "node",
+      "args": ["/absolute/path/to/Structured-Memory-Engine/lib/mcp-server.js"],
+      "env": {
+        "SME_WORKSPACE": "/absolute/path/to/workspace"
+      }
+    }
+  }
+}
+```
+
+If `SME_WORKSPACE` is omitted, defaults to `~/.claude`.
+
+### 4. (Optional) Session hooks
+
+Add to `~/.claude/settings.json` for auto-index on session start and reflect on session end:
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [],
+    "PostToolUse": [],
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /absolute/path/to/Structured-Memory-Engine/bin/sme-hook.js index"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /absolute/path/to/Structured-Memory-Engine/bin/sme-hook.js reflect"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+### 5. Verify
+
+```bash
+# CLI check
+node lib/index.js index --workspace ~/.claude
+node lib/index.js status --workspace ~/.claude
+
+# MCP server check — starts on stdio, ctrl+c to stop
+node lib/mcp-server.js
+```
+
+## Configuration
+
+Config lives at `{workspace}/.memory/config.json`. All fields are optional.
+
+```json
+{
+  "owner": "JB",
+  "include": ["CLAUDE.md", "TOOLS.md"],
+  "includeGlobs": ["agents/*.md", "skills/*.md", "plans/*.md"],
+  "fileTypeDefaults": {
+    "MEMORY.md": "confirmed",
+    "USER.md": "confirmed",
+    "CLAUDE.md": "confirmed",
+    "TOOLS.md": "confirmed",
+    "memory/*.md": "fact",
+    "agents/*.md": "fact",
+    "skills/*.md": "fact",
+    "plans/*.md": "inferred"
+  }
+}
+```
+
+| Field | Purpose |
+|-------|---------|
+| `owner` | Personalizes MCP tool descriptions ("Search JB's memory...") |
+| `include` | Explicit file paths to index beyond defaults |
+| `includeGlobs` | Glob patterns for additional files (`dir/*.md`, `dir/**/*.md`) |
+| `fileTypeDefaults` | Map file patterns to chunk types — activates the confidence system without inline tags |
+
+### File-level type defaults (v4.2)
+
+Maps file paths/patterns to chunk types. This activates the entire confidence system (decay rates, type filtering, reinforcement) without needing `[confirmed]`/`[inferred]` tags in every file.
+
+**Matching priority:**
+1. Exact full path (`memory/2026-02-24.md`)
+2. Exact basename (`MEMORY.md`)
+3. Glob pattern — longest match wins (`memory/*.md`)
+
+**Inline tags always override file defaults.** So a file defaulting to `fact` can still have individual `[confirmed]` or `[inferred]` chunks.
+
+**Available types and their confidence values:**
+
+| Type | Confidence | Decay behavior |
+|------|-----------|----------------|
+| `confirmed` | 1.0 | Immune to decay |
+| `fact` | 1.0 | Normal decay |
+| `decision` | 1.0 | Normal decay |
+| `preference` | 1.0 | Normal decay |
+| `opinion` | 0.8 | Normal decay |
+| `inferred` | 0.7 | Normal decay |
+| `outdated` | 0.3 | 2x faster decay |
+
+## MCP tools (v4)
+
+When running as an MCP server, exposes 5 tools:
+
+| Tool | Purpose |
+|------|---------|
+| `sme_query` | Search memory with full-text search, type/confidence filters, time ranges |
+| `sme_remember` | Save a fact/decision/preference to today's memory log (auto-indexed) |
+| `sme_index` | Re-index workspace (use `force: true` for full rebuild) |
+| `sme_reflect` | Run memory maintenance cycle (decay, reinforce, stale, contradictions, prune) |
+| `sme_status` | Show index statistics |
+
+The server auto-indexes on startup so the index is always fresh when Claude Code connects.
+
+## CLI commands
 
 ```bash
 # Indexing
@@ -82,6 +212,23 @@ The `reflect` command runs a full maintenance cycle:
 
 Use `--dry-run` to preview changes before applying.
 
+## Query expansion (v4.2)
+
+SME ships with ~60 built-in aliases covering crypto/DeFi, health, dev, personal, and finance domains. When an exact AND query returns nothing, it automatically falls back to OR-expanded queries using alias synonyms.
+
+Example: searching "supplement" will also match "stack", "protocol", "nootropic".
+
+Override or extend with `{workspace}/.memory/aliases.json`:
+
+```json
+{
+  "job": ["work", "career", "employment"],
+  "crypto": ["defi", "token", "chain", "wallet"]
+}
+```
+
+Custom keys replace defaults per-key (not extend).
+
 ## Ranking
 
 Results are scored by four factors:
@@ -93,29 +240,18 @@ Results are scored by four factors:
 | File weight | 0.8-1.5x | MEMORY.md 1.5x, USER.md 1.3x, daily logs 1.0x |
 | Confidence | 0-1x | `[confirmed]` ranks above `[outdated?]` |
 
-## Custom aliases
-
-Place `aliases.json` in `{workspace}/.memory/` for query expansion:
-
-```json
-{
-  "job": ["work", "career", "employment"],
-  "crypto": ["defi", "token", "chain", "wallet"]
-}
-```
-
 ## Design principles
 
 1. **Markdown is source of truth** — the SQLite index is derived and fully rebuildable
-2. **Read-only** — never modifies, deletes, or overwrites user files
+2. **Additive only** — never modifies, deletes, or overwrites user files (except `sme_remember` which appends to daily logs)
 3. **Offline-first** — no network, no API keys, no ongoing cost
-4. **Single dependency** — just `better-sqlite3`
+4. **Single dependency** — just `better-sqlite3` + MCP SDK
 5. **Archive, never delete** — pruned memories are recoverable via `restore`
 
 ## Testing
 
 ```bash
-npm test  # 49 tests (16 v2 + 33 v3)
+npm test  # 7 suites, ~200 assertions
 ```
 
 ## License
