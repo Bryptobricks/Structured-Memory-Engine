@@ -15,24 +15,22 @@ Search-only layer over existing markdown memory files. No writes, no modificatio
 
 ---
 
-## v2 — Retain (planned)
-Structured fact extraction from raw markdown into typed, entity-linked records.
+## v2 — Retain (shipped)
+Convention-based fact extraction from tagged markdown. Zero LLM calls, zero cost.
 
-- Parse daily logs and memory files into self-contained narrative facts
-- Classify chunks: `fact` | `opinion` | `experience` | `observation`
-- Extract entities beyond bold/mentions: people, dates, amounts, addresses, URLs, products
-- Link facts to entities (many-to-many relationship table)
-- Confidence scoring based on source type and repetition
-- Deduplication — detect near-duplicate facts across daily logs and curated files
-- **Offline-first extraction** — local LLM (7-8B) for bulk daily processing, API model for edge cases
+### Shipped:
+- Tag-based extraction: `[fact]`, `[decision]`, `[pref]`, `[opinion]`, `[confirmed]`, `[inferred]`, `[outdated?]`
+- Heading-based bullet classification (substring matching: `## Key Decisions`, `## What I Learned`, etc.)
+- Confidence mapping: `[confirmed]`→1.0, `[inferred]`→0.7, `[outdated?]`→0.3
+- Distinct type storage: confirmed/inferred/outdated stored as separate types (queryable independently)
+- Query filters: `--type` and `--min-confidence`
+- Confidence-weighted ranking in composite score
 
-Schema additions:
-- `entities` table (name, type, first_seen, last_seen, summary)
-- `chunk_entities` junction table
-- `chunk_type` field activated (currently always 'raw')
-- `confidence` field activated (currently always 1.0)
-
-**Key challenge:** Extraction quality. Must reliably distinguish facts from opinions, catch entity references in natural language, and handle contradictions (e.g., "JB takes 1.75mg reta" in one file vs "reduced to 1.5mg" in another).
+### Future (v2.x):
+- Entity tables (name, type, first_seen, last_seen, summary) + junction table
+- Richer entity extraction: people, dates, amounts, addresses, URLs
+- Deduplication across daily logs and curated files
+- One-time Haiku backfill for historical untagged files (Option C)
 
 ---
 
