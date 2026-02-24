@@ -182,6 +182,79 @@ console.log('Test 5: indexWorkspace pipeline');
   }
 }
 
+// ─── Test 6: indexWorkspace with fileTypeDefaults ───
+console.log('Test 6: indexWorkspace with fileTypeDefaults');
+{
+  const dir = makeTempDir();
+  try {
+    // MEMORY.md with no inline tags — should get file-level default
+    fs.writeFileSync(path.join(dir, 'MEMORY.md'), '# Long-Term Memory\n\nJB prefers dark themes and monospace fonts.\n');
+
+    const db = createDb();
+    const ftd = { 'MEMORY.md': 'confirmed' };
+    indexWorkspace(db, dir, { force: true, fileTypeDefaults: ftd });
+
+    const chunks = db.prepare("SELECT chunk_type, confidence FROM chunks WHERE file_path = 'MEMORY.md'").all();
+    assert(chunks.length > 0, `Should have MEMORY.md chunks, got ${chunks.length}`);
+    assert(chunks.every(c => c.chunk_type === 'confirmed'), `All MEMORY.md chunks should be confirmed, got ${chunks.map(c => c.chunk_type)}`);
+    assert(chunks.every(c => c.confidence === 1.0), `All MEMORY.md chunks should have confidence 1.0`);
+
+    db.close();
+  } finally {
+    cleanup(dir);
+  }
+}
+
+// ─── Test 7: indexWorkspace — inline tag overrides file default ───
+console.log('Test 7: indexWorkspace — inline tag overrides file default');
+{
+  const dir = makeTempDir();
+  try {
+    // File default = confirmed, but one chunk has [inferred] inline
+    fs.writeFileSync(path.join(dir, 'MEMORY.md'),
+      '# Preferences\n\n- [confirmed] JB uses dark mode\n\n# Guesses\n\n- [inferred] JB prefers warm lighting\n');
+
+    const db = createDb();
+    const ftd = { 'MEMORY.md': 'confirmed' };
+    indexWorkspace(db, dir, { force: true, fileTypeDefaults: ftd });
+
+    const chunks = db.prepare("SELECT chunk_type, confidence, content FROM chunks WHERE file_path = 'MEMORY.md' ORDER BY line_start").all();
+
+    // Chunk with [confirmed] tag — should stay confirmed (inline matches file default)
+    const confirmedChunk = chunks.find(c => c.content.includes('dark mode'));
+    assert(confirmedChunk && confirmedChunk.chunk_type === 'confirmed', 'Confirmed inline should stay confirmed');
+
+    // Chunk with [inferred] tag — inline overrides file default
+    const inferredChunk = chunks.find(c => c.content.includes('warm lighting'));
+    assert(inferredChunk && inferredChunk.chunk_type === 'inferred', `Inferred inline should override file default, got ${inferredChunk ? inferredChunk.chunk_type : 'missing'}`);
+    assert(inferredChunk && inferredChunk.confidence === 0.7, `Inferred confidence should be 0.7, got ${inferredChunk ? inferredChunk.confidence : 'missing'}`);
+
+    db.close();
+  } finally {
+    cleanup(dir);
+  }
+}
+
+// ─── Test 8: indexWorkspace — no fileTypeDefaults keeps raw ───
+console.log('Test 8: indexWorkspace — no fileTypeDefaults preserves raw behavior');
+{
+  const dir = makeTempDir();
+  try {
+    fs.writeFileSync(path.join(dir, 'USER.md'), '# User\n\nSome content without tags\n');
+
+    const db = createDb();
+    indexWorkspace(db, dir, { force: true });
+
+    const chunks = db.prepare("SELECT chunk_type FROM chunks WHERE file_path = 'USER.md'").all();
+    assert(chunks.length > 0, 'Should have USER.md chunks');
+    assert(chunks.every(c => c.chunk_type === 'raw'), `Without fileTypeDefaults, chunks should be raw, got ${chunks.map(c => c.chunk_type)}`);
+
+    db.close();
+  } finally {
+    cleanup(dir);
+  }
+}
+
 // ─── Summary ───
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

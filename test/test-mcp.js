@@ -295,6 +295,81 @@ console.log('Test 12: handleIndex without config still works (backward compat)')
   fs.rmSync(ws, { recursive: true });
 }
 
+// ─── Test 13: indexSingleFile with fileTypeDefaults ───
+console.log('Test 13: indexSingleFile with fileTypeDefaults');
+{
+  const ws = tmpWorkspace();
+  const db = createDb(ws);
+
+  // Create MEMORY.md with no inline tags
+  fs.writeFileSync(path.join(ws, 'MEMORY.md'), '# Long-Term Memory\n\nJB prefers dark themes\n\nZustand over Redux\n', 'utf-8');
+
+  const ftd = { 'MEMORY.md': 'confirmed' };
+  indexSingleFile(db, ws, path.join(ws, 'MEMORY.md'), ftd);
+
+  const chunks = db.prepare("SELECT chunk_type, confidence FROM chunks WHERE file_path = 'MEMORY.md'").all();
+  assert(chunks.length > 0, `Expected chunks from MEMORY.md, got ${chunks.length}`);
+  assert(chunks.every(c => c.chunk_type === 'confirmed'), `Expected all chunks confirmed, got ${chunks.map(c => c.chunk_type)}`);
+  assert(chunks.every(c => c.confidence === 1.0), `Expected all confidence 1.0, got ${chunks.map(c => c.confidence)}`);
+
+  db.close();
+  fs.rmSync(ws, { recursive: true });
+}
+
+// ─── Test 14: indexSingleFile — inline tag overrides file default ───
+console.log('Test 14: indexSingleFile — inline tag overrides file default');
+{
+  const ws = tmpWorkspace();
+  const db = createDb(ws);
+
+  const memDir = path.join(ws, 'memory');
+  fs.mkdirSync(memDir, { recursive: true });
+  // File default will be 'fact' (1.0), but one chunk has [inferred] tag (0.7)
+  fs.writeFileSync(path.join(memDir, '2026-02-24.md'),
+    '# Session Log\n\n- [inferred] JB likes warm colors\n\n## What Happened\n\nBuilt the SME v4.2\n', 'utf-8');
+
+  const ftd = { 'memory/*.md': 'fact' };
+  indexSingleFile(db, ws, path.join(memDir, '2026-02-24.md'), ftd);
+
+  const chunks = db.prepare("SELECT chunk_type, confidence, content FROM chunks WHERE file_path = 'memory/2026-02-24.md' ORDER BY line_start").all();
+  assert(chunks.length >= 1, `Expected at least 1 chunk, got ${chunks.length}`);
+
+  // The chunk containing the [inferred] tag should be 'inferred' (inline overrides file default)
+  const inferredChunk = chunks.find(c => c.content.includes('warm colors'));
+  assert(inferredChunk !== undefined, 'Should have chunk with warm colors');
+  assert(inferredChunk.chunk_type === 'inferred', `Expected inferred (inline override), got ${inferredChunk.chunk_type}`);
+  assert(inferredChunk.confidence === 0.7, `Expected 0.7 (inline override), got ${inferredChunk.confidence}`);
+
+  // The chunk without inline tags should keep file default
+  const defaultChunk = chunks.find(c => c.content.includes('Built the SME'));
+  if (defaultChunk) {
+    assert(defaultChunk.chunk_type === 'fact', `Expected fact (file default), got ${defaultChunk.chunk_type}`);
+    assert(defaultChunk.confidence === 1.0, `Expected 1.0 (file default), got ${defaultChunk.confidence}`);
+  }
+
+  db.close();
+  fs.rmSync(ws, { recursive: true });
+}
+
+// ─── Test 15: handleIndex threads fileTypeDefaults ───
+console.log('Test 15: handleIndex threads fileTypeDefaults to indexWorkspace');
+{
+  const ws = tmpWorkspace();
+  const db = createDb(ws);
+
+  fs.writeFileSync(path.join(ws, 'MEMORY.md'), '# Memory\n\nImportant facts here\n', 'utf-8');
+
+  const config = { ...DEFAULTS, fileTypeDefaults: { 'MEMORY.md': 'confirmed' } };
+  handleIndex(db, ws, { force: true }, config);
+
+  const chunks = db.prepare("SELECT chunk_type FROM chunks WHERE file_path = 'MEMORY.md'").all();
+  assert(chunks.length > 0, 'Expected MEMORY.md chunks');
+  assert(chunks[0].chunk_type === 'confirmed', `Expected confirmed from config, got ${chunks[0].chunk_type}`);
+
+  db.close();
+  fs.rmSync(ws, { recursive: true });
+}
+
 // ─── Summary ───
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

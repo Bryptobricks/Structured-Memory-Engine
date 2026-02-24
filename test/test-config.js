@@ -2,7 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { loadConfig, resolveIncludes, DEFAULTS } = require('../lib/config');
+const { loadConfig, resolveIncludes, resolveFileType, DEFAULTS } = require('../lib/config');
 
 let passed = 0, failed = 0;
 
@@ -162,6 +162,78 @@ console.log('Test 10: Mixed patterns — include + flat glob + nested glob');
   const resolved = resolveIncludes(ws, config);
   assert(resolved.length === 3, `Expected 3 total files, got ${resolved.length}`);
   fs.rmSync(ws, { recursive: true });
+}
+
+// --- Test 11: resolveFileType — exact basename match ---
+console.log('Test 11: resolveFileType — exact basename match');
+{
+  const ftd = { 'MEMORY.md': 'confirmed', 'memory/*.md': 'fact' };
+  const result = resolveFileType('MEMORY.md', ftd);
+  assert(result !== null, 'Should match MEMORY.md');
+  assert(result.type === 'confirmed', `Expected type confirmed, got ${result.type}`);
+  assert(result.confidence === 1.0, `Expected confidence 1.0, got ${result.confidence}`);
+}
+
+// --- Test 12: resolveFileType — glob match ---
+console.log('Test 12: resolveFileType — glob match');
+{
+  const ftd = { 'MEMORY.md': 'confirmed', 'memory/*.md': 'fact' };
+  const result = resolveFileType('memory/2026-02-24.md', ftd);
+  assert(result !== null, 'Should match memory/*.md glob');
+  assert(result.type === 'fact', `Expected type fact, got ${result.type}`);
+  assert(result.confidence === 1.0, `Expected confidence 1.0, got ${result.confidence}`);
+}
+
+// --- Test 13: resolveFileType — no match returns null ---
+console.log('Test 13: resolveFileType — no match returns null');
+{
+  const ftd = { 'MEMORY.md': 'confirmed' };
+  const result = resolveFileType('random/file.md', ftd);
+  assert(result === null, `Expected null for no match, got ${JSON.stringify(result)}`);
+}
+
+// --- Test 14: resolveFileType — unknown type string returns null ---
+console.log('Test 14: resolveFileType — unknown type string returns null');
+{
+  const ftd = { 'MEMORY.md': 'bogus_type' };
+  const result = resolveFileType('MEMORY.md', ftd);
+  assert(result === null, `Expected null for unknown type, got ${JSON.stringify(result)}`);
+}
+
+// --- Test 15: resolveFileType — exact full path beats basename ---
+console.log('Test 15: resolveFileType — exact full path beats basename');
+{
+  const ftd = { 'plans/special.md': 'confirmed', 'special.md': 'inferred', 'plans/*.md': 'opinion' };
+  const result = resolveFileType('plans/special.md', ftd);
+  assert(result !== null, 'Should match exact full path');
+  assert(result.type === 'confirmed', `Expected confirmed (exact path), got ${result.type}`);
+}
+
+// --- Test 16: resolveFileType — basename beats glob ---
+console.log('Test 16: resolveFileType — basename beats glob');
+{
+  const ftd = { 'MEMORY.md': 'confirmed', 'memory/*.md': 'fact' };
+  // MEMORY.md at root should match basename, not glob
+  const result = resolveFileType('MEMORY.md', ftd);
+  assert(result.type === 'confirmed', `Expected confirmed (basename), got ${result.type}`);
+}
+
+// --- Test 17: resolveFileType — inferred type and confidence ---
+console.log('Test 17: resolveFileType — inferred type maps correctly');
+{
+  const ftd = { 'plans/*.md': 'inferred' };
+  const result = resolveFileType('plans/roadmap.md', ftd);
+  assert(result !== null, 'Should match plans/*.md');
+  assert(result.type === 'inferred', `Expected inferred, got ${result.type}`);
+  assert(result.confidence === 0.7, `Expected 0.7, got ${result.confidence}`);
+}
+
+// --- Test 18: resolveFileType — null/undefined fileTypeDefaults ---
+console.log('Test 18: resolveFileType — handles null/undefined gracefully');
+{
+  assert(resolveFileType('MEMORY.md', null) === null, 'null defaults should return null');
+  assert(resolveFileType('MEMORY.md', undefined) === null, 'undefined defaults should return null');
+  assert(resolveFileType('MEMORY.md', {}) === null, 'empty defaults should return null');
 }
 
 // --- Summary ---

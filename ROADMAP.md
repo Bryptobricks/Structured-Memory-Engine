@@ -74,6 +74,13 @@ MCP server for Claude Code. First write-path (sme_remember).
 - Owner-personalized tool descriptions — `config.owner` drives "Search JB's memory..." vs generic
 - Zero changes to core modules (store, indexer, recall, retain, reflect)
 
+### v4.2 — File-Level Type Defaults + Alias Expansion (shipped):
+- File-level type defaults via `config.fileTypeDefaults` — map file patterns to chunk types (e.g. `MEMORY.md → confirmed`, `memory/*.md → fact`)
+- Priority: exact path > basename > glob pattern (longest wins). Inline tags still override file defaults.
+- `resolveFileType()` in config.js — shared by indexer.js and mcp-server.js
+- Expanded DEFAULT_ALIASES in recall.js — ~60 entries covering crypto/DeFi, health, dev, personal, finance
+- Threaded through all indexing paths: `indexWorkspace()`, `indexSingleFile()`, MCP auto-index, `handleRemember()`
+
 ### Future (v4.x):
 - sme_contradictions tool
 - sme_entity tool (entity-centric search)
