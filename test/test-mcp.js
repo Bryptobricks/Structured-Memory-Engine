@@ -9,7 +9,7 @@ const os = require('os');
 const Database = require('better-sqlite3');
 const { SCHEMA } = require('../lib/store');
 const { indexWorkspace } = require('../lib/indexer');
-const { handleQuery, handleRemember, handleIndex, handleReflect, handleStatus, indexSingleFile } = require('../lib/mcp-server');
+const { handleQuery, handleRemember, handleIndex, handleReflect, handleStatus, indexSingleFile, setStartupIndexResult } = require('../lib/mcp-server');
 const { remember } = require('../lib/remember');
 const { loadConfig, resolveIncludes, DEFAULTS } = require('../lib/config');
 
@@ -189,8 +189,12 @@ console.log('Test 8: indexSingleFile — targeted re-index');
   const beforeCount = db.prepare('SELECT COUNT(*) as n FROM chunks').get().n;
 
   // Append to one file and re-index just that file
-  fs.appendFileSync(path.join(memDir, '2026-02-20.md'), '- [confirmed] Added fact after initial index\n', 'utf-8');
-  const result = indexSingleFile(db, ws, path.join(memDir, '2026-02-20.md'));
+  // Bump mtime forward to guarantee it differs from the stored value (filesystem granularity can swallow sub-ms writes)
+  const filePath8 = path.join(memDir, '2026-02-20.md');
+  fs.appendFileSync(filePath8, '- [confirmed] Added fact after initial index\n', 'utf-8');
+  const future = new Date(Date.now() + 2000);
+  fs.utimesSync(filePath8, future, future);
+  const result = indexSingleFile(db, ws, filePath8);
   assert(result.skipped === false, 'Should have re-indexed the changed file');
 
   // Verify the new content is indexed
@@ -365,6 +369,93 @@ console.log('Test 15: handleIndex threads fileTypeDefaults to indexWorkspace');
   const chunks = db.prepare("SELECT chunk_type FROM chunks WHERE file_path = 'MEMORY.md'").all();
   assert(chunks.length > 0, 'Expected MEMORY.md chunks');
   assert(chunks[0].chunk_type === 'confirmed', `Expected confirmed from config, got ${chunks[0].chunk_type}`);
+
+  db.close();
+  fs.rmSync(ws, { recursive: true });
+}
+
+// ─── Test 16: handleRemember — no warning on successful index ───
+console.log('Test 16: handleRemember — no warning on successful index');
+{
+  const ws = tmpWorkspace();
+  const db = createDb(ws);
+
+  const result = handleRemember(db, ws, { content: 'Test fact for warning check', tag: 'fact' }, null);
+  const text = result.content[0].text;
+  assert(!text.includes('Indexing failed'), `Expected no warning on success, got: ${text}`);
+  assert(text.includes('Saved to'), 'Should confirm save');
+  db.close();
+  fs.rmSync(ws, { recursive: true });
+}
+
+// ─── Test 17: handleRemember — warning on index failure ───
+console.log('Test 17: handleRemember — warning on index failure');
+{
+  const ws = tmpWorkspace();
+  const db = createDb(ws);
+
+  // Write to a valid workspace, then close the DB to force an index error
+  // Instead, use a config with a broken workspace path to trigger indexSingleFile failure
+  // Actually, let's write the file then make the db read-only to force a failure
+  // Simplest approach: call with a workspace that will cause indexSingleFile to throw
+  const result = remember(ws, 'Fact to test warning', { tag: 'fact' });
+
+  // Now call handleRemember but sabotage the indexing by closing the db
+  const db2 = createDb(ws);
+  db2.close(); // close it so indexSingleFile will fail
+
+  const result2 = handleRemember(db2, ws, { content: 'Another test fact', tag: 'fact' }, null);
+  const text2 = result2.content[0].text;
+  assert(text2.includes('Indexing failed'), `Expected warning when index fails, got: ${text2}`);
+  fs.rmSync(ws, { recursive: true });
+}
+
+// ─── Test 18: handleStatus — startup index health OK ───
+console.log('Test 18: handleStatus — startup index health OK');
+{
+  const ws = tmpWorkspace();
+  const db = createDb(ws);
+
+  setStartupIndexResult({ ok: true, indexed: 5, skipped: 3 });
+  const result = handleStatus(db);
+  const text = result.content[0].text;
+  assert(text.includes('Startup index: OK'), `Expected startup OK, got: ${text}`);
+  assert(text.includes('indexed=5'), 'Should show indexed count');
+  assert(text.includes('skipped=3'), 'Should show skipped count');
+
+  db.close();
+  fs.rmSync(ws, { recursive: true });
+}
+
+// ─── Test 19: handleStatus — startup index health FAILED ───
+console.log('Test 19: handleStatus — startup index health FAILED');
+{
+  const ws = tmpWorkspace();
+  const db = createDb(ws);
+
+  setStartupIndexResult({ ok: false, error: 'SQLITE_ERROR: disk I/O error' });
+  const result = handleStatus(db);
+  const text = result.content[0].text;
+  assert(text.includes('Startup index: FAILED'), `Expected startup FAILED, got: ${text}`);
+  assert(text.includes('disk I/O error'), 'Should include error message');
+
+  // Reset for other tests
+  setStartupIndexResult(null);
+
+  db.close();
+  fs.rmSync(ws, { recursive: true });
+}
+
+// ─── Test 20: handleIndex — cleaned count displayed ───
+console.log('Test 20: handleIndex — cleaned count in output');
+{
+  const ws = tmpWorkspace();
+  const db = createDb(ws);
+
+  fs.writeFileSync(path.join(ws, 'MEMORY.md'), '# Memory\n\nSome facts\n');
+  const result = handleIndex(db, ws, { force: true }, null);
+  const text = result.content[0].text;
+  assert(text.includes('Cleaned:'), `Expected Cleaned count in output, got: ${text}`);
 
   db.close();
   fs.rmSync(ws, { recursive: true });

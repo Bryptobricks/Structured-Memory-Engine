@@ -255,6 +255,44 @@ console.log('Test 8: indexWorkspace — no fileTypeDefaults preserves raw behavi
   }
 }
 
+// ─── Test 9: indexWorkspace — orphan file cleanup ───
+console.log('Test 9: indexWorkspace — orphan file cleanup');
+{
+  const dir = makeTempDir();
+  try {
+    // Create two files and index
+    fs.writeFileSync(path.join(dir, 'MEMORY.md'), '# Memory\n\nSome facts\n');
+    fs.writeFileSync(path.join(dir, 'USER.md'), '# User\n\nUser info\n');
+
+    const db = createDb();
+    const r1 = indexWorkspace(db, dir, { force: true });
+    assert(r1.indexed === 2, `Should index 2 files, got ${r1.indexed}`);
+    assert(r1.cleaned === 0, `No orphans on first run, got ${r1.cleaned}`);
+
+    const filesBefore = db.prepare('SELECT COUNT(*) as n FROM files').get().n;
+    assert(filesBefore === 2, `Should have 2 file entries, got ${filesBefore}`);
+
+    // Delete USER.md from disk, re-index
+    fs.unlinkSync(path.join(dir, 'USER.md'));
+    const r2 = indexWorkspace(db, dir, { force: true });
+    assert(r2.cleaned === 1, `Should clean 1 orphan, got ${r2.cleaned}`);
+
+    // Verify DB no longer has USER.md
+    const filesAfter = db.prepare('SELECT COUNT(*) as n FROM files').get().n;
+    assert(filesAfter === 1, `Should have 1 file entry after cleanup, got ${filesAfter}`);
+    const userChunks = db.prepare("SELECT COUNT(*) as n FROM chunks WHERE file_path = 'USER.md'").get().n;
+    assert(userChunks === 0, `Should have 0 USER.md chunks after cleanup, got ${userChunks}`);
+
+    // MEMORY.md still intact
+    const memChunks = db.prepare("SELECT COUNT(*) as n FROM chunks WHERE file_path = 'MEMORY.md'").get().n;
+    assert(memChunks > 0, `MEMORY.md chunks should survive cleanup, got ${memChunks}`);
+
+    db.close();
+  } finally {
+    cleanup(dir);
+  }
+}
+
 // ─── Summary ───
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

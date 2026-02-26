@@ -27,7 +27,7 @@ try {
     const include = extras.map(p => path.relative(workspace, p));
     const fileTypeDefaults = config.fileTypeDefaults || {};
     const result = indexWorkspace(db, workspace, { include, fileTypeDefaults });
-    log(`Indexed: ${result.indexed} | Skipped: ${result.skipped} | Total: ${result.total}`);
+    log(`Indexed: ${result.indexed} | Skipped: ${result.skipped} | Total: ${result.total} | Cleaned: ${result.cleaned}`);
   } else if (command === 'reflect') {
     const result = runReflectCycle(db);
     log(`Reflect: decayed=${result.decay.decayed} reinforced=${result.reinforce.reinforced} stale=${result.stale.marked} contradictions=${result.contradictions.newFlags} archived=${result.prune.archived}`);

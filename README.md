@@ -1,6 +1,6 @@
 # Structured Memory Engine
 
-SQLite FTS5-powered memory system for AI workspaces. Indexes markdown memory files, extracts structured facts, and maintains memory health over time — all offline, zero API calls, single dependency.
+Persistent, self-maintaining memory for AI agents. Indexes markdown files into a SQLite FTS5 database, extracts structured facts with confidence scoring, and runs its own memory lifecycle — decay, reinforcement, contradiction detection, and pruning. Exposes everything through an MCP server and a JSON-capable CLI. No API calls, no cloud, no ongoing cost. One dependency. Your AI remembers everything, forever.
 
 ## What it does
 
@@ -9,7 +9,7 @@ SQLite FTS5-powered memory system for AI workspaces. Indexes markdown memory fil
 | **Recall** | v1 | Full-text search over markdown files with ranked results and citations |
 | **Retain** | v2 | Convention-based fact extraction with confidence scoring |
 | **Reflect** | v3 | Memory lifecycle — decay, reinforcement, staleness, contradiction detection, pruning |
-| **Reach** | v4 | MCP server for Claude Code — live search, write-path, config, file-level type defaults |
+| **Reach** | v4 | MCP server for Claude Code — live search, write-path, config, file-level type defaults, JSON API |
 
 ## Setup on a new device
 
@@ -163,7 +163,7 @@ When running as an MCP server, exposes 5 tools:
 | `sme_reflect` | Run memory maintenance cycle (decay, reinforce, stale, contradictions, prune) |
 | `sme_status` | Show index statistics |
 
-The server auto-indexes on startup so the index is always fresh when Claude Code connects.
+The server auto-indexes on startup so the index is always fresh when Claude Code connects. Startup health is reported via `sme_status`.
 
 ## CLI commands
 
@@ -174,10 +174,10 @@ node lib/index.js index [--workspace PATH] [--force] [--include extra.md,other.m
 # Search
 node lib/index.js query "terms" [--limit N] [--since 7d|2w|3m|1y|2026-01-01]
                                  [--context N] [--type fact|confirmed|inferred|...]
-                                 [--min-confidence 0.5] [--include-stale]
+                                 [--min-confidence 0.5] [--include-stale] [--json]
 
 # Status
-node lib/index.js status [--workspace PATH]
+node lib/index.js status [--workspace PATH] [--json]
 
 # Memory maintenance
 node lib/index.js reflect [--dry-run] [--workspace PATH]
@@ -185,6 +185,22 @@ node lib/index.js contradictions [--unresolved] [--limit N]
 node lib/index.js archived [--limit N]
 node lib/index.js restore <chunk-id>
 ```
+
+### JSON output (`--json`)
+
+Any command that returns data supports `--json` for machine-parseable output. This makes SME a universal memory backend — any runtime, bot, script, or agent can shell out and get structured data back.
+
+```bash
+# Structured search results
+node lib/index.js query "aave health factor" --json
+# → {"results":[{"filePath":"memory/2026-02-23.md","heading":"Aave V3 On-Chain Debt Integration","content":"...","score":-10.45,...}],"count":1}
+
+# Index stats as JSON
+node lib/index.js status --json
+# → {"fileCount":22,"chunkCount":293,"files":[...]}
+```
+
+Pipe into `jq`, feed to a Telegram bot, call from a cron job, integrate with any AI agent — SME doesn't care what's on the other end.
 
 ## Fact tagging (v2)
 
@@ -240,6 +256,14 @@ Results are scored by four factors:
 | File weight | 0.8-1.5x | MEMORY.md 1.5x, USER.md 1.3x, daily logs 1.0x |
 | Confidence | 0-1x | `[confirmed]` ranks above `[outdated?]` |
 
+## Index hygiene (v4.2.1)
+
+SME keeps its index clean automatically:
+
+- **Orphan cleanup** — when you delete a markdown file, the next index run detects it and removes the stale DB entries. No ghost results polluting your searches.
+- **Write-path integrity** — `sme_remember` writes the fact, then immediately re-indexes just that file. If indexing fails, you get a visible warning instead of a silent black hole where your memory is saved but unsearchable.
+- **Startup health** — `sme_status` reports whether the auto-index on MCP startup succeeded or failed, so you can diagnose issues without guessing.
+
 ## Design principles
 
 1. **Markdown is source of truth** — the SQLite index is derived and fully rebuildable
@@ -247,11 +271,12 @@ Results are scored by four factors:
 3. **Offline-first** — no network, no API keys, no ongoing cost
 4. **Single dependency** — just `better-sqlite3` + MCP SDK
 5. **Archive, never delete** — pruned memories are recoverable via `restore`
+6. **Self-cleaning** — orphan detection, write-path verification, startup health checks
 
 ## Testing
 
 ```bash
-npm test  # 7 suites, ~200 assertions
+npm test  # 8 suites, 329 assertions
 ```
 
 ## License
