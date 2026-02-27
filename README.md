@@ -2,13 +2,20 @@
 
 **Your AI agent forgets everything between sessions. SME fixes that.**
 
-Persistent, self-maintaining memory that runs locally. No API calls, no cloud, no ongoing cost. Three lines of code and your agent remembers everything — decisions, preferences, people, context — forever.
+```bash
+npm install structured-memory-engine
+```
+
+Persistent, self-maintaining memory that runs locally. No API calls, no cloud, no ongoing cost. **587 tests. <1ms recall. $0/month forever.**
+
+<!-- TODO: Add demo GIF here -->
+<!-- ![SME Demo](assets/demo.gif) -->
 
 ```js
-const engine = require('structured-memory-engine').create({ workspace: '.' });
-engine.index();
-engine.context('What did Sarah say about the migration plan?');
-// → Returns ranked, cited, confidence-scored context from 60+ meeting transcripts
+const sme = require('structured-memory-engine').create({ workspace: '.' });
+sme.index();
+sme.context('What did Sarah say about the migration plan?');
+// → Ranked, cited, confidence-scored context from 60+ meeting transcripts in <1ms
 ```
 
 ## The Problem
@@ -88,18 +95,40 @@ CIL context is the critical path — it runs on every agent turn. At <1ms averag
 
 ## Quickstart (60 seconds)
 
+### Option A: npm (recommended)
+
 ```bash
-git clone https://github.com/chainseeker44/Structured-Memory-Engine.git
+npm install structured-memory-engine
+```
+
+```js
+const sme = require('structured-memory-engine').create({ workspace: '.' });
+sme.index();                                          // Index your markdown files
+sme.context('What did we decide about the API?');     // Get ranked context
+sme.remember('Switching to PostgreSQL', { tag: 'decision' }); // Save a memory
+```
+
+### Option B: Clone + CLI
+
+```bash
+git clone https://github.com/Bryptobricks/Structured-Memory-Engine.git
 cd Structured-Memory-Engine && npm install
 
 # Index your workspace
-node lib/index.js index --workspace ~/your-workspace
+sme index --workspace ~/your-workspace
 
 # Search it
-node lib/index.js query "what did we decide" --workspace ~/your-workspace
+sme query "what did we decide" --workspace ~/your-workspace
 
 # Get auto-formatted context for any message
-node lib/index.js context "What's the status on the API migration?"
+sme context "What's the status on the API migration?"
+```
+
+### Option C: npx (zero install)
+
+```bash
+npx structured-memory-engine index --workspace ~/your-workspace
+npx structured-memory-engine query "deployment timeline"
 ```
 
 That's it. Your markdown files are now a searchable, ranked, confidence-scored memory system.

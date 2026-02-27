@@ -40,6 +40,8 @@
     "openclaw",
     "structured-memory"
   ],
+  "author": "Bryptobricks",
+  "homepage": "https://github.com/Bryptobricks/Structured-Memory-Engine#readme",
   "license": "MIT",
   "repository": {
     "type": "git",
