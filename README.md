@@ -410,7 +410,7 @@ CIL scores chunks with 6 signals (weights shift when semantic embeddings are ava
 | File weight | 0.075 | 0.075 | MEMORY.md 1.5x, USER.md 1.3x, daily logs 1.0x |
 | Entity match | 0.075 | 0.075 | Bonus when chunk entities overlap with query entities |
 
-Final score = base × confidence^1.5. This makes low-confidence facts drop sharply (conf 0.6 → 0.465 multiplier, conf 0.3 → 0.164).
+Final score = base × confidence^exponent. CIL uses exponent 1.5 (conf 0.6 → 0.465 multiplier, conf 0.3 → 0.164). `sme_query` uses the same shared scorer with a recall-tuned profile (linear confidence, 90-day recency half-life, heavier FTS weight).
 
 ## Index hygiene (v4.2.1)
 
@@ -481,7 +481,7 @@ See [skills/structured-memory-engine/SKILL.md](skills/structured-memory-engine/S
 ## Testing
 
 ```bash
-npm test  # 14 suites, 470 assertions
+npm test  # 14 suites, 520 tests
 ```
 
 ## License

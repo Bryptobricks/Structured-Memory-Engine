@@ -83,7 +83,39 @@ MCP server for Claude Code. First write-path (sme_remember).
 
 ### Future (v4.x):
 - sme_contradictions tool
-- sme_entity tool (entity-centric search)
+
+---
+
+## v5 — Context Intelligence Layer
+Auto-retrieval pipeline: extract terms → dual FTS5 search → multi-signal ranking → token budgeting → formatted injection.
+
+### v5.0 (shipped):
+- CIL core: extractQueryTerms → AND+OR dual query → cilScore (5-signal weighted) → budgetChunks → formatContext
+- sme_context MCP tool — auto-retrieval for Claude Code
+- Entity-match bonus in scoring — known entities from chunks boost relevance
+- Contradiction flagging in context output
+
+### v5.1 (shipped):
+- OpenClaw plugin auto-recall: `before_agent_start` hook injects context automatically
+- OpenClaw plugin auto-capture: scans user messages for decisions/preferences/facts, saves to daily log
+- Plugin config: autoRecall, autoRecallMaxTokens, autoCapture, captureMaxChars
+
+### v5.2 (shipped):
+- Entity graph with co-occurrence tracking (sme_entities tool)
+- Conversation context — multi-turn awareness via recent message terms
+- Semantic embeddings — optional @xenova/transformers, cosine similarity in CIL scoring
+- sme_embed tool — status + build commands for embedding management
+
+### v5.2.1 — Hardening (shipped):
+- Fix: CIL pipeline no longer inflates access_count (skipTracking flag on search)
+- Consolidated scoring — single scorer in lib/scoring.js with weight profiles (RECALL, CIL, CIL_SEMANTIC)
+- Input validation at MCP boundary — max length constraints on all string inputs
+- 48 new unit tests for scoring, CIL functions, skipTracking, entity cache
+- 14 test suites, 520 tests total
+
+### Future (v5.x):
+- Scheduled reflection jobs (cron/daily)
+- Core memory promotion — surface frequently-accessed facts for always-loaded context
 
 ---
 
