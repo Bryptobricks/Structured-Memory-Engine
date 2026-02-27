@@ -308,6 +308,34 @@ console.log('Test 12: Near-duplicate chunks not flagged as contradictions');
   db.close();
 }
 
+// ─── Test 13: Recurring heading across 3+ files skipped ───
+console.log('Test 13: Recurring heading across 3+ files skipped');
+{
+  const db = createDb();
+  // "Response Quality" appears across 4 daily files — should be treated as recurring template
+  insertChunk(db, { heading: '1. Response Quality', content: 'response quality was not great today, missed key context signals', filePath: 'memory/2026-01-26.md', createdAt: daysAgo(30) });
+  insertChunk(db, { heading: '1. Response Quality', content: 'response quality improved, did not miss any important context signals', filePath: 'memory/2026-02-02.md', createdAt: daysAgo(23) });
+  insertChunk(db, { heading: '1. Response Quality', content: 'response quality was not consistent, missed some context signals', filePath: 'memory/2026-02-09.md', createdAt: daysAgo(16) });
+  insertChunk(db, { heading: '1. Response Quality', content: 'response quality excellent, did not drop any context signals today', filePath: 'memory/2026-02-16.md', createdAt: daysAgo(9) });
+
+  const result = detectContradictions(db, { dryRun: false });
+  assert(result.newFlags === 0, `Expected 0 contradictions for recurring heading across 4 files, got ${result.newFlags}`);
+  db.close();
+}
+
+// ─── Test 14: Heading in exactly 2 files still checked ───
+console.log('Test 14: Heading in exactly 2 files still checked');
+{
+  const db = createDb();
+  // Same heading in only 2 files — should still detect contradiction
+  insertChunk(db, { heading: 'Daily Protocol', content: 'takes bromantane sublingual daily morning protocol for focus energy', filePath: 'memory/2026-01-01.md', createdAt: daysAgo(60) });
+  insertChunk(db, { heading: 'Daily Protocol', content: 'stopped bromantane sublingual daily morning protocol due tolerance', filePath: 'memory/2026-02-01.md', createdAt: daysAgo(10) });
+
+  const result = detectContradictions(db, { dryRun: false });
+  assert(result.newFlags === 1, `Expected 1 contradiction for heading in 2 files, got ${result.newFlags}`);
+  db.close();
+}
+
 // ─── Summary ───
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
