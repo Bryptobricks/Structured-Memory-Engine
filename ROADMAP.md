@@ -113,6 +113,17 @@ Auto-retrieval pipeline: extract terms → dual FTS5 search → multi-signal ran
 - 48 new unit tests for scoring, CIL functions, skipTracking, entity cache
 - 14 test suites, 520 tests total
 
+### v5.3 — Ingest Pipeline (shipped):
+- Transcript parser — speaker tracking, decision/action-item detection, section-aware extraction
+- CSV parser — state machine (handles quoted fields, escaped quotes, newlines in quotes, ragged rows)
+- Sync runner — parse → tagged markdown → indexSingleFile, mtime-based skip via manifest
+- New `action_item` tag type — confidence 0.85, supported in retain, remember, scoring
+- `sme_ingest` MCP tool — ingest meeting transcripts and CSV files
+- `ingest` CLI command — single file or directory batch sync
+- Node API: `ingest()`, `parseTranscript()`, `parseCsv()` methods
+- Auto-sync on MCP startup via `config.ingest.autoSync`
+- `ingest/` directory auto-discovered by indexer
+
 ### Future (v5.x):
 - Scheduled reflection jobs (cron/daily)
 - Core memory promotion — surface frequently-accessed facts for always-loaded context

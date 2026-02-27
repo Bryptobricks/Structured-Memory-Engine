@@ -12,6 +12,7 @@ Persistent, self-maintaining memory for AI agents. Indexes markdown files into a
 | **Reach** | v4 | MCP server for Claude Code — live search, write-path, config, file-level type defaults, JSON API |
 | **Context** | v5 | Context Intelligence Layer — auto-retrieval, multi-signal ranking, token-budgeted injection, auto-capture |
 | **Connect** | v5.2 | Entity graph, conversation context, optional semantic embeddings |
+| **Ingest** | v5.3 | Transcript + CSV parsing, tagged markdown generation, auto-sync pipeline |
 
 ## Context Intelligence Layer (v5)
 
@@ -183,11 +184,12 @@ Maps file paths/patterns to chunk types. This activates the entire confidence sy
 | `preference` | 1.0 | Normal decay |
 | `opinion` | 0.8 | Normal decay |
 | `inferred` | 0.7 | Normal decay |
+| `action_item` | 0.85 | Normal decay |
 | `outdated` | 0.3 | 2x faster decay |
 
 ## MCP tools (v4+)
 
-When running as an MCP server, exposes 8 tools:
+When running as an MCP server, exposes 9 tools:
 
 | Tool | Purpose |
 |------|---------|
@@ -199,6 +201,7 @@ When running as an MCP server, exposes 8 tools:
 | `sme_status` | Show index statistics |
 | `sme_entities` | Query the entity graph — look up people, projects, co-occurring entities |
 | `sme_embed` | Manage semantic embeddings — check status, build embeddings for all chunks |
+| `sme_ingest` | Ingest meeting transcripts or CSV files — parse, tag, index |
 
 The server auto-indexes on startup so the index is always fresh when Claude Code connects. Startup health is reported via `sme_status`.
 
@@ -253,6 +256,75 @@ When installed, `sme_context` auto-computes a query embedding and scores chunks 
 
 Embeddings are stored as BLOB columns in the chunks table. Model: `Xenova/all-MiniLM-L6-v2` (384-dim, runs locally).
 
+## Ingest Pipeline (v5.3)
+
+SME can ingest structured data from meeting transcripts and CSV files. The pipeline parses source files, generates tagged markdown, writes to `{workspace}/ingest/`, and indexes via `indexSingleFile`. Markdown is the source of truth; the DB is derived.
+
+```
+Source files → Adapter (parse) → Tagged markdown → indexSingleFile → DB
+```
+
+### Transcripts
+
+Parses speaker lines, tracks `currentSpeaker` across continuation lines, detects decisions and action items by keyword, and extracts attendees from `## Attendees` sections and speaker names.
+
+```bash
+# CLI
+node lib/index.js ingest meeting-notes.txt --workspace ~/.claude
+
+# Node API
+engine.ingest('/path/to/meeting-notes.txt');
+
+# MCP
+# sme_ingest with sourcePath: "/path/to/meeting-notes.txt"
+```
+
+Output at `{workspace}/ingest/meeting-notes.md`:
+```markdown
+# Meeting Notes — meeting-notes.txt
+
+## Summary
+- [fact] Product review meeting covering Q1 roadmap priorities.
+
+## Decisions
+- [decision] We decided to go with REST over GraphQL (Speaker: Mike Chen)
+
+## Action Items
+- [action_item] Lisa Park will send the API spec to the backend team (Assigned: Lisa Park)
+
+## Attendees
+- Lisa Park, Mike Chen, Sarah Johnson
+```
+
+### CSV
+
+State machine parser handling quoted fields, escaped quotes (`""`), newlines inside quotes, and ragged rows. Auto-detects headerless CSVs (all-numeric first row → generated `col_0, col_1, ...` headers).
+
+```bash
+node lib/index.js ingest data.csv --workspace ~/.claude
+```
+
+### Sync behavior
+
+- **Manifest tracking** — `{workspace}/ingest/.sync-manifest.json` stores source mtime per file
+- **Skip unchanged** — re-running ingest on the same file is a no-op unless `--force`
+- **Directory batch** — pass a directory to ingest all `.txt`, `.md`, `.csv` files in one call
+- **Auto-sync** — set `config.ingest.autoSync: true` + `config.ingest.sourceDir` to sync on MCP startup
+
+### Config
+
+Add to `{workspace}/.memory/config.json`:
+
+```json
+{
+  "ingest": {
+    "sourceDir": "/path/to/meeting-notes",
+    "autoSync": true,
+    "entityColumn": "Name"
+  }
+}
+```
+
 ## CLI commands
 
 ```bash
@@ -280,6 +352,10 @@ node lib/index.js entities Jason --dry-run     # show related entities
 
 # Context (CIL)
 node lib/index.js context "What did we decide about lending?"
+
+# Ingest
+node lib/index.js ingest meeting.txt                    # single file
+node lib/index.js ingest /path/to/sources/ --force      # directory, force re-sync
 ```
 
 ### JSON output (`--json`)
@@ -342,7 +418,7 @@ Returns an engine instance. Options:
 |--------|---------|-------------|
 | `query(text, opts)` | `Array` of ranked results | Search memory. Options: `limit`, `since`, `context`, `type`, `chunkType`, `minConfidence`, `includeStale` |
 | `context(message, opts)` | `{ text, chunks, tokenEstimate }` | Get relevant context for injection. Options: `maxTokens`, `maxChunks`, `confidenceFloor`, `recencyBoostDays`, `flagContradictions`, `conversationContext`, `queryEmbedding` |
-| `remember(content, opts)` | `{ filePath, created, line }` | Save to daily memory log and auto-index. Options: `tag` (`fact`/`decision`/`pref`/`opinion`/`confirmed`/`inferred`), `date` |
+| `remember(content, opts)` | `{ filePath, created, line }` | Save to daily memory log and auto-index. Options: `tag` (`fact`/`decision`/`pref`/`opinion`/`confirmed`/`inferred`/`action_item`), `date` |
 | `index(opts)` | `{ indexed, skipped, total, cleaned }` | Re-index workspace. Options: `force` |
 | `reflect(opts)` | `{ decay, reinforce, stale, contradictions, prune, entityIndex }` | Run maintenance cycle + entity rebuild. Options: `dryRun` |
 | `status()` | `{ fileCount, chunkCount, files }` | Index statistics |
@@ -350,6 +426,9 @@ Returns an engine instance. Options:
 | `entities(name?)` | `Object` or `Array` | Get entity info by name, or list all entities |
 | `relatedEntities(name)` | `Array` | Get co-occurring entities sorted by count |
 | `buildEntities(opts)` | `{ entities, chunks }` | Rebuild entity index. Options: `dryRun` |
+| `ingest(sourcePath, opts)` | `{ outputPath, indexed, skipped }` | Ingest a transcript or CSV file. Options: `force`, `type`, `entityColumn` |
+| `parseTranscript(text, opts)` | `{ sections, speakers, decisions, actionItems, metadata }` | Parse transcript text without writing files |
+| `parseCsv(text, opts)` | `{ headers, rows, metadata }` | Parse CSV text without writing files |
 | `close()` | — | Close database handle |
 
 All methods return raw data objects — no MCP formatting, no string wrapping. Integrate with anything.
@@ -363,6 +442,7 @@ Tag lines in your markdown for structured extraction:
 [decision] FTS5 over vector DB for search
 [confirmed] Height is 6'5"
 [inferred] Prefers warm lighting
+[action_item] Send API spec to backend team by Friday
 [outdated?] Takes 1.75mg retatrutide
 ```
 
@@ -481,7 +561,7 @@ See [skills/structured-memory-engine/SKILL.md](skills/structured-memory-engine/S
 ## Testing
 
 ```bash
-npm test  # 14 suites, 520 tests
+npm test  # 15 suites, 569 tests
 ```
 
 ## License
