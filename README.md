@@ -11,6 +11,7 @@ Persistent, self-maintaining memory for AI agents. Indexes markdown files into a
 | **Reflect** | v3 | Memory lifecycle — decay, reinforcement, staleness, contradiction detection, pruning |
 | **Reach** | v4 | MCP server for Claude Code — live search, write-path, config, file-level type defaults, JSON API |
 | **Context** | v5 | Context Intelligence Layer — auto-retrieval, multi-signal ranking, token-budgeted injection, auto-capture |
+| **Connect** | v5.2 | Entity graph, conversation context, optional semantic embeddings |
 
 ## Context Intelligence Layer (v5)
 
@@ -18,11 +19,12 @@ CIL turns SME from a searchable memory store into an auto-injection engine. Inst
 
 **How it works:**
 
-1. **Extract** — Pull key terms and entity names from the user's message
-2. **Query** — Dual FTS5 search: AND query for precision, OR+aliases for recall
-3. **Rank** — 5-signal scoring: FTS relevance (0.45) + recency (0.25) + type priority (0.15) + file weight (0.075) + entity match (0.075), multiplied by confidence
-4. **Budget** — Select top chunks within a token budget (default 1500), truncate if needed
-5. **Inject** — Format as `## Recalled Context` block with source citations, confidence warnings, and contradiction flags
+1. **Extract** — Pull key terms and entity names from the user's message + recent conversation
+2. **Expand** — Entity graph adds co-occurring entities (mention "Jason" → also match "Avalon")
+3. **Query** — Dual FTS5 search: AND query for precision, OR+aliases for recall
+4. **Rank** — 6-signal scoring: FTS relevance + semantic similarity + recency + type priority + file weight + entity match, multiplied by confidence^1.5
+5. **Budget** — Select top chunks within a token budget (default 1500), truncate if needed
+6. **Inject** — Format as `## Recalled Context` block with source citations, confidence warnings, and contradiction flags
 
 **Three ways to use it:**
 
@@ -183,9 +185,9 @@ Maps file paths/patterns to chunk types. This activates the entire confidence sy
 | `inferred` | 0.7 | Normal decay |
 | `outdated` | 0.3 | 2x faster decay |
 
-## MCP tools (v4)
+## MCP tools (v4+)
 
-When running as an MCP server, exposes 6 tools:
+When running as an MCP server, exposes 8 tools:
 
 | Tool | Purpose |
 |------|---------|
@@ -193,10 +195,63 @@ When running as an MCP server, exposes 6 tools:
 | `sme_context` | Get relevant context for a message — ranked, budgeted, formatted for injection |
 | `sme_remember` | Save a fact/decision/preference to today's memory log (auto-indexed) |
 | `sme_index` | Re-index workspace (use `force: true` for full rebuild) |
-| `sme_reflect` | Run memory maintenance cycle (decay, reinforce, stale, contradictions, prune) |
+| `sme_reflect` | Run memory maintenance cycle (decay, reinforce, stale, contradictions, prune, entity rebuild) |
 | `sme_status` | Show index statistics |
+| `sme_entities` | Query the entity graph — look up people, projects, co-occurring entities |
+| `sme_embed` | Manage semantic embeddings — check status, build embeddings for all chunks |
 
 The server auto-indexes on startup so the index is always fresh when Claude Code connects. Startup health is reported via `sme_status`.
+
+## Entity Graph (v5.2)
+
+SME tracks entity co-occurrences across all memory chunks. When "Jason" and "Avalon" appear in the same chunks repeatedly, SME knows they're related — even if a query only mentions one.
+
+**How it works:** The entity index is rebuilt during every `reflect` cycle. It scans all chunk entity tags, builds co-occurrence counts, and stores them in a flat `entity_index` table for O(1) lookup.
+
+**CIL integration:** When you query "What does Jason need?", CIL finds that Jason co-occurs with Avalon (2+ times), expands the entity set, and boosts Avalon-tagged chunks in results. You get related context you didn't explicitly ask for.
+
+```bash
+# List all known entities
+sme entities
+
+# Look up a specific entity
+sme entities Jason
+
+# CLI
+node lib/index.js entities Jason
+```
+
+## Conversation Context (v5.2)
+
+CIL supports multi-turn awareness. Pass the last 2-3 user messages as `conversationContext` and CIL extracts terms from them too — so "what about that?" after a question about bromantane will pull bromantane memories, not nothing.
+
+```js
+engine.context('what about that?', {
+  conversationContext: ["How's the bromantane experiment going?"]
+});
+```
+
+The `sme_context` MCP tool accepts `conversationContext` as an array parameter.
+
+## Semantic Embeddings (v5.2, optional)
+
+For conceptual similarity beyond keyword matching. Requires `@xenova/transformers` as an optional peer dependency.
+
+```bash
+npm install @xenova/transformers  # ~50MB, local model, no API calls
+```
+
+When installed, `sme_context` auto-computes a query embedding and scores chunks by cosine similarity against stored vectors. The ranking weights shift: FTS drops from 0.45 to 0.25, semantic similarity gets 0.25. When not installed, everything works exactly as before.
+
+```bash
+# Check embedding status
+# via MCP: sme_embed with action: "status"
+
+# Build embeddings for all chunks
+# via MCP: sme_embed with action: "build"
+```
+
+Embeddings are stored as BLOB columns in the chunks table. Model: `Xenova/all-MiniLM-L6-v2` (384-dim, runs locally).
 
 ## CLI commands
 
@@ -217,6 +272,14 @@ node lib/index.js reflect [--dry-run] [--workspace PATH]
 node lib/index.js contradictions [--unresolved] [--limit N]
 node lib/index.js archived [--limit N]
 node lib/index.js restore <chunk-id>
+
+# Entity graph
+node lib/index.js entities                     # list all entities
+node lib/index.js entities Jason               # look up entity
+node lib/index.js entities Jason --dry-run     # show related entities
+
+# Context (CIL)
+node lib/index.js context "What did we decide about lending?"
 ```
 
 ### JSON output (`--json`)
@@ -278,12 +341,15 @@ Returns an engine instance. Options:
 | Method | Returns | Description |
 |--------|---------|-------------|
 | `query(text, opts)` | `Array` of ranked results | Search memory. Options: `limit`, `since`, `context`, `type`, `chunkType`, `minConfidence`, `includeStale` |
-| `context(message, opts)` | `{ text, chunks, tokenEstimate }` | Get relevant context for injection. Options: `maxTokens`, `maxChunks`, `confidenceFloor`, `recencyBoostDays`, `flagContradictions` |
+| `context(message, opts)` | `{ text, chunks, tokenEstimate }` | Get relevant context for injection. Options: `maxTokens`, `maxChunks`, `confidenceFloor`, `recencyBoostDays`, `flagContradictions`, `conversationContext`, `queryEmbedding` |
 | `remember(content, opts)` | `{ filePath, created, line }` | Save to daily memory log and auto-index. Options: `tag` (`fact`/`decision`/`pref`/`opinion`/`confirmed`/`inferred`), `date` |
 | `index(opts)` | `{ indexed, skipped, total, cleaned }` | Re-index workspace. Options: `force` |
 | `reflect(opts)` | `{ decay, reinforce, stale, contradictions, prune }` | Run maintenance cycle. Options: `dryRun` |
 | `status()` | `{ fileCount, chunkCount, files }` | Index statistics |
 | `restore(chunkId)` | `{ restored, newId?, error? }` | Restore archived chunk |
+| `entities(name?)` | `Object` or `Array` | Get entity info by name, or list all entities |
+| `relatedEntities(name)` | `Array` | Get co-occurring entities sorted by count |
+| `buildEntities(opts)` | `{ entities, chunks }` | Rebuild entity index. Options: `dryRun` |
 | `close()` | — | Close database handle |
 
 All methods return raw data objects — no MCP formatting, no string wrapping. Integrate with anything.
@@ -333,14 +399,18 @@ Custom keys replace defaults per-key (not extend).
 
 ## Ranking
 
-Results are scored by four factors:
+CIL scores chunks with 6 signals (weights shift when semantic embeddings are available):
 
-| Factor | Weight | Description |
-|--------|--------|-------------|
-| FTS5 BM25 | base | Keyword relevance |
-| Recency | 1-2x | Linear decay over 90 days |
-| File weight | 0.8-1.5x | MEMORY.md 1.5x, USER.md 1.3x, daily logs 1.0x |
-| Confidence | 0-1x | `[confirmed]` ranks above `[outdated?]` |
+| Signal | Without embeddings | With embeddings | Description |
+|--------|-------------------|-----------------|-------------|
+| FTS relevance | 0.45 | 0.25 | Keyword match via BM25 (normalized, 0.3 floor) |
+| Semantic similarity | — | 0.25 | Cosine similarity against query embedding |
+| Recency | 0.25 | 0.20 | Exponential decay (half-life = `recencyBoostDays`) |
+| Type priority | 0.15 | 0.15 | `confirmed` +0.15, `decision` +0.12, ..., `outdated` -0.15 |
+| File weight | 0.075 | 0.075 | MEMORY.md 1.5x, USER.md 1.3x, daily logs 1.0x |
+| Entity match | 0.075 | 0.075 | Bonus when chunk entities overlap with query entities |
+
+Final score = base × confidence^1.5. This makes low-confidence facts drop sharply (conf 0.6 → 0.465 multiplier, conf 0.3 → 0.164).
 
 ## Index hygiene (v4.2.1)
 
@@ -355,7 +425,7 @@ SME keeps its index clean automatically:
 1. **Markdown is source of truth** — the SQLite index is derived and fully rebuildable
 2. **Additive only** — never modifies, deletes, or overwrites user files (except `sme_remember` which appends to daily logs)
 3. **Offline-first** — no network, no API keys, no ongoing cost
-4. **Single dependency** — just `better-sqlite3` + MCP SDK
+4. **Minimal dependencies** — `better-sqlite3` + MCP SDK + zod
 5. **Archive, never delete** — pruned memories are recoverable via `restore`
 6. **Self-cleaning** — orphan detection, write-path verification, startup health checks
 
@@ -411,7 +481,7 @@ See [skills/structured-memory-engine/SKILL.md](skills/structured-memory-engine/S
 ## Testing
 
 ```bash
-npm test  # 11 suites, 429 assertions
+npm test  # 14 suites, 470 assertions
 ```
 
 ## License

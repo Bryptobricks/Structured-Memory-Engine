@@ -1,6 +1,6 @@
 {
   "name": "structured-memory-engine",
-  "version": "5.1.0",
+  "version": "5.2.0",
   "description": "Structured memory engine with MCP server for Claude Code — SQLite FTS5",
   "main": "lib/api.js",
   "exports": {
@@ -12,11 +12,12 @@
     "query": "node lib/index.js query",
     "status": "node lib/index.js status",
     "mcp": "node lib/mcp-server.js",
-    "test": "node test/test-store.js && node test/test-retain.js && node test/test-reflect.js && node test/test-recall.js && node test/test-indexer.js && node test/test-remember.js && node test/test-mcp.js && node test/test-config.js && node test/test-api.js && node test/test-context.js && node test/test-plugin-hooks.js"
+    "test": "node test/test-store.js && node test/test-retain.js && node test/test-reflect.js && node test/test-recall.js && node test/test-indexer.js && node test/test-remember.js && node test/test-mcp.js && node test/test-config.js && node test/test-api.js && node test/test-context.js && node test/test-plugin-hooks.js && node test/test-entities.js && node test/test-embeddings.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.0",
-    "better-sqlite3": "^11.8.1"
+    "better-sqlite3": "^11.8.1",
+    "zod": "^3.25.0"
   },
   "bin": {
     "sme": "lib/index.js"
@@ -45,6 +46,14 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/chainseeker44/Structured-Memory-Engine.git"
+  },
+  "peerDependencies": {
+    "@xenova/transformers": "^2.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@xenova/transformers": {
+      "optional": true
+    }
   },
   "engines": {
     "node": ">=18"

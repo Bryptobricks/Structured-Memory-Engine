@@ -13,6 +13,7 @@ description: >
 When running as an MCP server (`node lib/mcp-server.js`), exposes:
 
 - `sme_query` — Search memory. Supports `query`, `limit`, `since`, `type`, `minConfidence`, `includeStale`.
+- `sme_context` — Get relevant context for a message. Returns ranked, token-budgeted, formatted context for injection. Supports `message`, `maxTokens`.
 - `sme_remember` — Save a fact/decision/preference to today's memory log. Auto-indexed.
 - `sme_index` — Re-index workspace. Use `force: true` for full rebuild.
 - `sme_reflect` — Run maintenance: decay, reinforce, stale detection, contradictions, prune. Use `dryRun: true` to preview.

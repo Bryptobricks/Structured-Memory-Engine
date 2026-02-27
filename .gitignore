@@ -1,2 +1,4 @@
 node_modules/
 .memory/
+.DS_Store
+.env

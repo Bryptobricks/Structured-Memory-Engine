@@ -199,6 +199,52 @@ console.log('Test 10: Token budget enforcement');
   db.close();
 }
 
+// ─── Test 11: Conversation context — "what about that?" resolves from prior turn ───
+console.log('Test 11: Conversation context resolves anaphoric reference');
+{
+  const db = createDb();
+  seedFixture(db);
+  // "what about that?" alone would match nothing useful
+  const withoutContext = getRelevantContext(db, 'what about that?');
+  // With conversation context mentioning bromantane, it should pull bromantane chunks
+  const withContext = getRelevantContext(db, 'what about that?', {
+    conversationContext: ["How's the bromantane experiment going?"],
+  });
+  assert(withContext.chunks.length > withoutContext.chunks.length ||
+    (withContext.chunks.length > 0 && withContext.chunks[0].content.includes('Bromantane')),
+    `Expected conversation context to improve results`);
+  db.close();
+}
+
+// ─── Test 12: Conversation context — entity from prior turn ───
+console.log('Test 12: Conversation context carries entity from prior turn');
+{
+  const db = createDb();
+  seedFixture(db);
+  // "and the fund flow?" alone won't match Jason's action item well
+  // But with prior context mentioning Jason, entity match should boost it
+  const result = getRelevantContext(db, 'and the fund flow doc?', {
+    conversationContext: ['What do I need to send Jason?'],
+  });
+  assert(result.chunks.length > 0, `Expected chunks, got ${result.chunks.length}`);
+  const hasJason = result.chunks.some(c => c.content.includes('Jason'));
+  assert(hasJason, 'Expected Jason chunk to appear via conversation context entity match');
+  db.close();
+}
+
+// ─── Test 13: Conversation context — empty array has no effect ───
+console.log('Test 13: Empty conversation context has no effect');
+{
+  const db = createDb();
+  seedFixture(db);
+  const without = getRelevantContext(db, "How's the bromantane experiment going?");
+  const withEmpty = getRelevantContext(db, "How's the bromantane experiment going?", {
+    conversationContext: [],
+  });
+  assert(without.chunks.length === withEmpty.chunks.length, 'Empty context array should not change results');
+  db.close();
+}
+
 // ─── Summary ───
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

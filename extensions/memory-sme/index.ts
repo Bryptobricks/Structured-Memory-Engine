@@ -76,23 +76,6 @@ export default function plugin(api: any) {
       const sme = require("structured-memory-engine");
       engine = sme.create({ workspace });
 
-      // Merge fileTypeDefaults from plugin config into SME's config if provided
-      if (config.fileTypeDefaults) {
-        const configPath = join(workspace, ".memory", "config.json");
-        try {
-          const existing = JSON.parse(readFileSync(configPath, "utf-8"));
-          existing.fileTypeDefaults = {
-            ...existing.fileTypeDefaults,
-            ...config.fileTypeDefaults,
-          };
-          // Don't write back — SME reads config on create(). The merge
-          // happens at the SME level via loadConfig. For runtime override,
-          // the user edits .memory/config.json directly.
-        } catch {
-          // No existing config — that's fine, SME uses defaults
-        }
-      }
-
       // --- Tool: memory_search ---
       api.registerTool({
         name: "memory_search",
@@ -267,8 +250,8 @@ export default function plugin(api: any) {
         async execute(params: { dryRun?: boolean }) {
           const result = engine.reflect({ dryRun: params.dryRun ?? false });
           const parts = [
-            `Decay: ${result.decay?.affected ?? 0} chunks`,
-            `Reinforce: ${result.reinforce?.affected ?? 0} chunks`,
+            `Decay: ${result.decay?.decayed ?? 0} chunks`,
+            `Reinforce: ${result.reinforce?.reinforced ?? 0} chunks`,
             `Stale: ${result.stale?.marked ?? 0} chunks`,
             `Contradictions: ${result.contradictions?.found ?? 0} found`,
             `Prune: ${result.prune?.archived ?? 0} archived`,

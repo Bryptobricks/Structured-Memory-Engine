@@ -61,7 +61,7 @@ Memory lifecycle management. Rule-based, zero LLM calls, zero ongoing cost.
 MCP server for Claude Code. First write-path (sme_remember).
 
 ### v4.0 (shipped):
-- MCP stdio server with 5 tools: sme_query, sme_remember, sme_index, sme_reflect, sme_status
+- MCP stdio server with 6 tools: sme_query, sme_context, sme_remember, sme_index, sme_reflect, sme_status
 - New remember module — write tagged facts to daily memory logs
 - Auto-reindex after remember (mtime-based, only changed file reindexed)
 - Workspace configurable via SME_WORKSPACE env var
@@ -84,7 +84,6 @@ MCP server for Claude Code. First write-path (sme_remember).
 ### Future (v4.x):
 - sme_contradictions tool
 - sme_entity tool (entity-centric search)
-- Context window parameter for sme_query
 
 ---
 
@@ -94,4 +93,4 @@ MCP server for Claude Code. First write-path (sme_remember).
 2. **Additive only** — never modifies, deletes, or overwrites existing user files
 3. **Offline-first** — works without network; cloud APIs are optional enhancements
 4. **Seamless integration** — layers on top of any OpenClaw workspace without configuration
-5. **Forward-compatible schema** — v1 schema includes reserved columns for v2/v3 to avoid migrations
+5. **Forward-compatible schema** — migrations are additive and non-destructive
