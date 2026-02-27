@@ -1,7 +1,7 @@
 {
   "name": "structured-memory-engine",
-  "version": "5.3.0",
-  "description": "Structured memory engine with MCP server for Claude Code — SQLite FTS5",
+  "version": "5.4.0",
+  "description": "Persistent, self-maintaining memory for AI agents. Local SQLite FTS5, zero API calls, <1ms recall.",
   "main": "lib/api.js",
   "exports": {
     ".": "./lib/api.js",
@@ -25,11 +25,8 @@
   },
   "files": [
     "lib/",
-    "bin/",
-    "examples/",
     "README.md",
-    "LICENSE",
-    "SKILL.md"
+    "LICENSE"
   ],
   "keywords": [
     "memory",
@@ -46,7 +43,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/chainseeker44/Structured-Memory-Engine.git"
+    "url": "git+https://github.com/Bryptobricks/Structured-Memory-Engine.git"
   },
   "peerDependencies": {
     "@xenova/transformers": "^2.0.0"

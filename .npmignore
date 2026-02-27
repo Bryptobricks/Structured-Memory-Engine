@@ -1,10 +1,22 @@
+# Tests
 test/
-test-fixture/
+benchmarks/
+
+# Extensions (OpenClaw plugin — install separately)
 extensions/
-skills/
+
+# Examples and docs
+examples/
+ROADMAP.md
+SKILL.md
+
+# Dev files
 .memory/
 .git/
-.gitignore
-.DS_Store
-ROADMAP.md
-package-lock.json
+.github/
+.corrections.json
+.memory-hashes.json
+
+# Data
+data/
+ingest/
