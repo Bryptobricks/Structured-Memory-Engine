@@ -233,6 +233,13 @@ console.log('Test 5: search');
   const limited = search(db, 'magnesium', { limit: 1, includeStale: true });
   assert(limited.length === 1, `Limit 1: expected 1, got ${limited.length}`);
 
+  // skipTracking — search still returns results but does not increment access_count
+  const beforeSkip = db.prepare("SELECT access_count FROM chunks WHERE file_path = 'a.md'").get();
+  const skipResult = search(db, 'bromantane', { skipTracking: true });
+  assert(skipResult.length === 1, `skipTracking: expected 1 result, got ${skipResult.length}`);
+  const afterSkip = db.prepare("SELECT access_count FROM chunks WHERE file_path = 'a.md'").get();
+  assert(afterSkip.access_count === beforeSkip.access_count, `skipTracking: access_count should not change, was ${beforeSkip.access_count}, now ${afterSkip.access_count}`);
+
   db.close();
 }
 
