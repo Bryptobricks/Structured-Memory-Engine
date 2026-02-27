@@ -69,6 +69,21 @@ Every time your agent receives a message, SME runs a 6-step pipeline in <50ms:
 
 Markdown files are always the source of truth. The SQLite index is derived and fully rebuildable. SME never modifies your files.
 
+## Benchmarks
+
+Measured on Apple M3 Max, 69GB RAM, Node v24.13.0. Run `npm run bench` to verify on your hardware.
+
+| Operation | Dataset | Avg | p95 | Notes |
+|-----------|---------|-----|-----|-------|
+| Full index | 100 files → 500 chunks | 31ms | — | Cold start |
+| Incremental reindex | 2/100 files changed | 2.2ms | — | mtime-based skip |
+| Query (FTS5) | 10 queries, 500 chunks | 0.2ms | 0.2ms | Top 5 results |
+| CIL context | 10 messages, 1500 tk budget | 0.3ms | 0.4ms | Full 6-step pipeline |
+| Reflect cycle | 500 chunks | 3ms | — | All 5 phases |
+| DB overhead | 100 files (100 KB src) | 368 KB | — | 3.7x source size |
+
+CIL context is the critical path — it runs on every agent turn. At <1ms average, it adds negligible latency to any agent interaction.
+
 ## Quickstart (60 seconds)
 
 ```bash
