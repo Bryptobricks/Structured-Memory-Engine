@@ -10,6 +10,38 @@ Persistent, self-maintaining memory for AI agents. Indexes markdown files into a
 | **Retain** | v2 | Convention-based fact extraction with confidence scoring |
 | **Reflect** | v3 | Memory lifecycle — decay, reinforcement, staleness, contradiction detection, pruning |
 | **Reach** | v4 | MCP server for Claude Code — live search, write-path, config, file-level type defaults, JSON API |
+| **Context** | v5 | Context Intelligence Layer — auto-retrieval, multi-signal ranking, token-budgeted injection, auto-capture |
+
+## Context Intelligence Layer (v5)
+
+CIL turns SME from a searchable memory store into an auto-injection engine. Instead of the agent manually querying memory, CIL extracts terms from the current message, runs a multi-signal retrieval pipeline, and injects the most relevant facts directly into the system prompt.
+
+**How it works:**
+
+1. **Extract** — Pull key terms and entity names from the user's message
+2. **Query** — Dual FTS5 search: AND query for precision, OR+aliases for recall
+3. **Rank** — 5-signal scoring: FTS relevance (0.45) + recency (0.25) + type priority (0.15) + file weight (0.075) + entity match (0.075), multiplied by confidence
+4. **Budget** — Select top chunks within a token budget (default 1500), truncate if needed
+5. **Inject** — Format as `## Recalled Context` block with source citations, confidence warnings, and contradiction flags
+
+**Three ways to use it:**
+
+| Method | How | Auto? |
+|--------|-----|-------|
+| **MCP tool** | Agent calls `sme_context` with the user's message | No — agent must be instructed |
+| **Node API** | `engine.context('user message')` | No — caller invokes |
+| **OpenClaw plugin** | `before_agent_start` hook injects automatically | Yes — zero config |
+
+**Auto-recall** (OpenClaw plugin): Every agent turn, CIL reads the user's message, retrieves relevant memories, and prepends them to the system prompt. The agent just *knows* things without being asked to search. Enabled by default.
+
+**Auto-capture** (OpenClaw plugin): After each agent turn, user messages are scanned for decisions, preferences, and facts. Matched content is automatically saved to the daily memory log. Max 3 captures per turn to avoid noise.
+
+**For MCP-only users** (Claude Code, Cursor, etc.): Add this to your CLAUDE.md or system prompt:
+
+```
+Before responding to any user message, call sme_context with the user's message
+to retrieve relevant memory. Incorporate the returned context silently.
+```
 
 ## Setup on a new device
 
@@ -153,11 +185,12 @@ Maps file paths/patterns to chunk types. This activates the entire confidence sy
 
 ## MCP tools (v4)
 
-When running as an MCP server, exposes 5 tools:
+When running as an MCP server, exposes 6 tools:
 
 | Tool | Purpose |
 |------|---------|
 | `sme_query` | Search memory with full-text search, type/confidence filters, time ranges |
+| `sme_context` | Get relevant context for a message — ranked, budgeted, formatted for injection |
 | `sme_remember` | Save a fact/decision/preference to today's memory log (auto-indexed) |
 | `sme_index` | Re-index workspace (use `force: true` for full rebuild) |
 | `sme_reflect` | Run memory maintenance cycle (decay, reinforce, stale, contradictions, prune) |
@@ -245,6 +278,7 @@ Returns an engine instance. Options:
 | Method | Returns | Description |
 |--------|---------|-------------|
 | `query(text, opts)` | `Array` of ranked results | Search memory. Options: `limit`, `since`, `context`, `type`, `chunkType`, `minConfidence`, `includeStale` |
+| `context(message, opts)` | `{ text, chunks, tokenEstimate }` | Get relevant context for injection. Options: `maxTokens`, `maxChunks`, `confidenceFloor`, `recencyBoostDays`, `flagContradictions` |
 | `remember(content, opts)` | `{ filePath, created, line }` | Save to daily memory log and auto-index. Options: `tag` (`fact`/`decision`/`pref`/`opinion`/`confirmed`/`inferred`), `date` |
 | `index(opts)` | `{ indexed, skipped, total, cleaned }` | Re-index workspace. Options: `force` |
 | `reflect(opts)` | `{ decay, reinforce, stale, contradictions, prune }` | Run maintenance cycle. Options: `dryRun` |
@@ -342,7 +376,26 @@ Replace `memory-core` with SME. One config change, instant upgrade.
 }
 ```
 
-Registers `memory_search`, `memory_get`, `memory_remember`, `memory_reflect`. Auto-indexes on startup. See [extensions/memory-sme/README.md](extensions/memory-sme/README.md) for full setup.
+Registers `memory_search`, `memory_get`, `memory_remember`, `memory_reflect`. Auto-indexes on startup. CIL auto-recall and auto-capture are enabled by default.
+
+**Plugin config options:**
+
+```json
+{
+  "plugins": {
+    "config": {
+      "memory-sme": {
+        "autoRecall": true,
+        "autoRecallMaxTokens": 1500,
+        "autoCapture": true,
+        "captureMaxChars": 500
+      }
+    }
+  }
+}
+```
+
+See [extensions/memory-sme/README.md](extensions/memory-sme/README.md) for full setup.
 
 ### Path 2: Skill (try before you commit)
 
@@ -358,7 +411,7 @@ See [skills/structured-memory-engine/SKILL.md](skills/structured-memory-engine/S
 ## Testing
 
 ```bash
-npm test  # 9 suites, 375 assertions
+npm test  # 11 suites, 429 assertions
 ```
 
 ## License

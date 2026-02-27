@@ -10,6 +10,10 @@ interface PluginConfig {
   fileTypeDefaults?: Record<string, string>;
   reflectInterval?: string;
   autoIndex?: boolean;
+  autoRecall?: boolean;
+  autoRecallMaxTokens?: number;
+  autoCapture?: boolean;
+  captureMaxChars?: number;
 }
 
 interface SMEResult {
@@ -26,6 +30,34 @@ interface SMEResult {
   date: string;
 }
 
+// Patterns that indicate content worth capturing automatically
+const CAPTURE_TRIGGERS = [
+  /\b(decided|decision|choosing|chose|picked|going with|settled on)\b/i,
+  /\b(prefer|preference|always use|never use|switched to|moving to)\b/i,
+  /\b(remember|don't forget|note to self|important:|key takeaway)\b/i,
+  /\b(learned|realized|discovered|turns out|found out)\b/i,
+  /\b(started|stopped|quit|dropped|added|removed|changed)\b.{5,}\b(daily|weekly|routine|protocol|stack|dose)\b/i,
+  /\b(agreed|committed|promised|scheduled|deadline)\b/i,
+];
+
+function shouldCapture(text: string): string | null {
+  if (!text || text.length < 20) return null;
+  // Skip if it looks like a question
+  if (/^\s*(what|how|why|when|where|who|can|could|should|would|is|are|do|does)\b/i.test(text) && text.includes("?")) return null;
+  // Skip greetings / filler
+  if (/^(hi|hey|hello|thanks|ok|sure|got it|sounds good)/i.test(text.trim())) return null;
+
+  for (const pattern of CAPTURE_TRIGGERS) {
+    if (pattern.test(text)) {
+      // Infer tag from trigger
+      if (/\b(decided|decision|chose|going with|settled on)\b/i.test(text)) return "decision";
+      if (/\b(prefer|always use|never use|switched to)\b/i.test(text)) return "pref";
+      return "fact";
+    }
+  }
+  return null;
+}
+
 export default function plugin(api: any) {
   let engine: any = null;
 
@@ -36,6 +68,10 @@ export default function plugin(api: any) {
       const config: PluginConfig = ctx.config ?? {};
       const workspace = config.workspace ?? ctx.workspace;
       const autoIndex = config.autoIndex !== false;
+      const autoRecall = config.autoRecall !== false;
+      const autoRecallMaxTokens = config.autoRecallMaxTokens ?? 1500;
+      const autoCapture = config.autoCapture !== false;
+      const captureMaxChars = config.captureMaxChars ?? 500;
 
       const sme = require("structured-memory-engine");
       engine = sme.create({ workspace });
@@ -245,13 +281,79 @@ export default function plugin(api: any) {
         },
       });
 
-      // --- Lifecycle hook: before_agent_start ---
-      if (autoIndex) {
-        api.on("before_agent_start", async () => {
+      // --- Lifecycle hook: before_agent_start (auto-index + auto-recall) ---
+      api.on("before_agent_start", async (event: any) => {
+        // Auto-index on startup
+        if (autoIndex) {
           try {
             engine.index();
           } catch {
             // Index failure is non-fatal — agent still starts
+          }
+        }
+
+        // Auto-recall: inject relevant context into system prompt
+        if (!autoRecall) return;
+        if (!event?.prompt || event.prompt.length < 5) return;
+
+        try {
+          const result = engine.context(event.prompt, {
+            maxTokens: autoRecallMaxTokens,
+          });
+
+          if (!result.text) return;
+
+          api.logger?.info?.(
+            `memory-sme: injecting ${result.chunks.length} chunks (${result.tokenEstimate} tokens)`
+          );
+
+          return {
+            prependContext: result.text,
+          };
+        } catch (err: any) {
+          api.logger?.warn?.(`memory-sme: CIL recall failed: ${String(err)}`);
+        }
+      });
+
+      // --- Lifecycle hook: agent_end (auto-capture) ---
+      if (autoCapture) {
+        api.on("agent_end", async (event: any) => {
+          const messages = event?.messages;
+          if (!Array.isArray(messages)) return;
+
+          let captured = 0;
+          const MAX_CAPTURES_PER_TURN = 3;
+
+          for (const msg of messages) {
+            if (captured >= MAX_CAPTURES_PER_TURN) break;
+
+            // Only capture user messages — skip agent/assistant output
+            if (msg.role !== "user") continue;
+
+            const text = typeof msg.content === "string"
+              ? msg.content
+              : msg.content?.map?.((b: any) => b.text ?? "").join(" ") ?? "";
+
+            if (!text || text.length < 20) continue;
+
+            const tag = shouldCapture(text);
+            if (!tag) continue;
+
+            const truncated = text.length > captureMaxChars
+              ? text.slice(0, captureMaxChars) + "…"
+              : text;
+
+            try {
+              engine.remember(truncated, { tag });
+              captured++;
+              api.logger?.info?.(
+                `memory-sme: auto-captured [${tag}] ${truncated.slice(0, 60)}…`
+              );
+            } catch (err: any) {
+              api.logger?.warn?.(
+                `memory-sme: auto-capture failed: ${String(err)}`
+              );
+            }
           }
         });
       }
@@ -265,3 +367,6 @@ export default function plugin(api: any) {
     },
   });
 }
+
+// Export for testing
+export { shouldCapture, CAPTURE_TRIGGERS };
