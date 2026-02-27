@@ -14,13 +14,13 @@ function assert(condition, msg) {
 // Test 1: Tagged facts
 console.log('Test 1: Tagged facts');
 const tagged = `
-[fact] JB takes bromantane 25mg daily
+[fact] Alex takes bromantane 25mg daily
 [decision] Use FTS5 over vector DB
 [pref] No over-engineering
 [opinion] Bromantane is better than Adderall
-[confirmed] JB's height is 6'5"
-[inferred] JB prefers warm lighting
-[outdated?] JB takes 1.75mg retatrutide
+[confirmed] Alex's height is 6'5"
+[inferred] Alex prefers warm lighting
+[outdated?] Alex takes 1.75mg retatrutide
 `.trim();
 
 const facts1 = extractFacts(tagged, 'test.md');

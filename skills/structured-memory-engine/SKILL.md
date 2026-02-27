@@ -86,7 +86,7 @@ Create `$SME_WORKSPACE/.memory/config.json`:
 
 ```json
 {
-  "owner": "JB",
+  "owner": "Alex",
   "include": ["CLAUDE.md", "TOOLS.md"],
   "includeGlobs": ["agents/*.md", "skills/*.md"],
   "fileTypeDefaults": {

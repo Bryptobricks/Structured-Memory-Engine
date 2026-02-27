@@ -79,12 +79,12 @@ console.log('Test 2: Query entity returns chunk IDs and co-occurrences');
 console.log('Test 3: Related entities sorted by co-occurrence count');
 {
   const db = createDb();
-  insertChunk(db, { content: 'JB met Jason at ETHDenver', entities: JSON.stringify(['JB', 'Jason', 'ETHDenver']) });
-  insertChunk(db, { content: 'JB and Jason discussed MovePosition', entities: JSON.stringify(['JB', 'Jason', 'MovePosition']) });
-  insertChunk(db, { content: 'JB reviewed the portfolio', entities: JSON.stringify(['JB']) });
+  insertChunk(db, { content: 'Alex met Jason at ETHDenver', entities: JSON.stringify(['Alex', 'Jason', 'ETHDenver']) });
+  insertChunk(db, { content: 'Alex and Jason discussed MovePosition', entities: JSON.stringify(['Alex', 'Jason', 'MovePosition']) });
+  insertChunk(db, { content: 'Alex reviewed the portfolio', entities: JSON.stringify(['Alex']) });
   buildEntityIndex(db);
 
-  const related = getRelatedEntities(db, 'JB');
+  const related = getRelatedEntities(db, 'Alex');
   assert(related.length >= 1, `Expected at least 1 related entity, got ${related.length}`);
   assert(related[0].entity === 'jason', `Expected Jason as top co-occurrence, got ${related[0].entity}`);
   assert(related[0].count === 2, `Expected co-occurrence count 2, got ${related[0].count}`);
@@ -95,15 +95,15 @@ console.log('Test 3: Related entities sorted by co-occurrence count');
 console.log('Test 4: List all entities sorted by mention count');
 {
   const db = createDb();
-  insertChunk(db, { content: 'A', entities: JSON.stringify(['JB', 'Jason']) });
-  insertChunk(db, { content: 'B', entities: JSON.stringify(['JB', 'MovePosition']) });
-  insertChunk(db, { content: 'C', entities: JSON.stringify(['JB']) });
+  insertChunk(db, { content: 'A', entities: JSON.stringify(['Alex', 'Jason']) });
+  insertChunk(db, { content: 'B', entities: JSON.stringify(['Alex', 'MovePosition']) });
+  insertChunk(db, { content: 'C', entities: JSON.stringify(['Alex']) });
   buildEntityIndex(db);
 
   const list = listEntities(db);
   assert(list.length >= 3, `Expected at least 3 entities, got ${list.length}`);
-  assert(list[0].entity === 'jb', `Expected JB as most mentioned, got ${list[0].entity}`);
-  assert(list[0].mention_count === 3, `Expected 3 mentions for JB, got ${list[0].mention_count}`);
+  assert(list[0].entity === 'alex', `Expected Alex as most mentioned, got ${list[0].entity}`);
+  assert(list[0].mention_count === 3, `Expected 3 mentions for Alex, got ${list[0].mention_count}`);
   db.close();
 }
 
@@ -159,14 +159,14 @@ console.log('Test 7: CIL uses entity co-occurrence to expand results');
 console.log('Test 8: Dry run reports counts without writing');
 {
   const db = createDb();
-  insertChunk(db, { content: 'A', entities: JSON.stringify(['JB']) });
+  insertChunk(db, { content: 'A', entities: JSON.stringify(['Alex']) });
   insertChunk(db, { content: 'B', entities: JSON.stringify(['Jason']) });
 
   const result = buildEntityIndex(db, { dryRun: true });
   assert(result.entities === 2, `Expected 2 entities, got ${result.entities}`);
 
   // Should not have written to DB
-  const query = getEntity(db, 'JB');
+  const query = getEntity(db, 'Alex');
   assert(query === null, 'Dry run should not write to entity_index');
   db.close();
 }

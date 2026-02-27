@@ -140,7 +140,7 @@ Config lives at `{workspace}/.memory/config.json`. All fields are optional.
 
 ```json
 {
-  "owner": "JB",
+  "owner": "Alex",
   "include": ["CLAUDE.md", "TOOLS.md"],
   "includeGlobs": ["agents/*.md", "skills/*.md", "plans/*.md"],
   "fileTypeDefaults": {
@@ -158,7 +158,7 @@ Config lives at `{workspace}/.memory/config.json`. All fields are optional.
 
 | Field | Purpose |
 |-------|---------|
-| `owner` | Personalizes MCP tool descriptions ("Search JB's memory...") |
+| `owner` | Personalizes MCP tool descriptions ("Search Alex's memory...") |
 | `include` | Explicit file paths to index beyond defaults |
 | `includeGlobs` | Glob patterns for additional files (`dir/*.md`, `dir/**/*.md`) |
 | `fileTypeDefaults` | Map file patterns to chunk types — activates the confidence system without inline tags |

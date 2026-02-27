@@ -188,7 +188,7 @@ console.log('Test 6: indexWorkspace with fileTypeDefaults');
   const dir = makeTempDir();
   try {
     // MEMORY.md with no inline tags — should get file-level default
-    fs.writeFileSync(path.join(dir, 'MEMORY.md'), '# Long-Term Memory\n\nJB prefers dark themes and monospace fonts.\n');
+    fs.writeFileSync(path.join(dir, 'MEMORY.md'), '# Long-Term Memory\n\nAlex prefers dark themes and monospace fonts.\n');
 
     const db = createDb();
     const ftd = { 'MEMORY.md': 'confirmed' };
@@ -212,7 +212,7 @@ console.log('Test 7: indexWorkspace — inline tag overrides file default');
   try {
     // File default = confirmed, but one chunk has [inferred] inline
     fs.writeFileSync(path.join(dir, 'MEMORY.md'),
-      '# Preferences\n\n- [confirmed] JB uses dark mode\n\n# Guesses\n\n- [inferred] JB prefers warm lighting\n');
+      '# Preferences\n\n- [confirmed] Alex uses dark mode\n\n# Guesses\n\n- [inferred] Alex prefers warm lighting\n');
 
     const db = createDb();
     const ftd = { 'MEMORY.md': 'confirmed' };

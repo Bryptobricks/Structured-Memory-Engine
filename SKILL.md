@@ -46,7 +46,7 @@ Config file: `{workspace}/.memory/config.json`
 
 ```json
 {
-  "owner": "JB",
+  "owner": "Alex",
   "include": ["CLAUDE.md", "TOOLS.md"],
   "includeGlobs": ["agents/*.md", "skills/*.md", "plans/*.md"],
   "fileTypeDefaults": {

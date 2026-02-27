@@ -58,7 +58,7 @@ console.log('Test 1: handleQuery formatting');
 {
   const ws = tmpWorkspace();
   const db = createDb(ws);
-  insertChunk(db, { heading: 'Health', content: 'JB takes bromantane sublingual 50mg daily for focus', chunkType: 'confirmed', confidence: 1.0, filePath: 'memory/2026-02-20.md' });
+  insertChunk(db, { heading: 'Health', content: 'Alex takes bromantane sublingual 50mg daily for focus', chunkType: 'confirmed', confidence: 1.0, filePath: 'memory/2026-02-20.md' });
   insertChunk(db, { heading: 'Stack', content: 'magnesium glycinate 400mg before bed', chunkType: 'fact', confidence: 0.9, filePath: 'MEMORY.md' });
 
   const result = handleQuery(db, ws, { query: 'bromantane' });
@@ -307,7 +307,7 @@ console.log('Test 13: indexSingleFile with fileTypeDefaults');
   const db = createDb(ws);
 
   // Create MEMORY.md with no inline tags
-  fs.writeFileSync(path.join(ws, 'MEMORY.md'), '# Long-Term Memory\n\nJB prefers dark themes\n\nZustand over Redux\n', 'utf-8');
+  fs.writeFileSync(path.join(ws, 'MEMORY.md'), '# Long-Term Memory\n\nAlex prefers dark themes\n\nZustand over Redux\n', 'utf-8');
 
   const ftd = { 'MEMORY.md': 'confirmed' };
   indexSingleFile(db, ws, path.join(ws, 'MEMORY.md'), ftd);
@@ -331,7 +331,7 @@ console.log('Test 14: indexSingleFile — inline tag overrides file default');
   fs.mkdirSync(memDir, { recursive: true });
   // File default will be 'fact' (1.0), but one chunk has [inferred] tag (0.7)
   fs.writeFileSync(path.join(memDir, '2026-02-24.md'),
-    '# Session Log\n\n- [inferred] JB likes warm colors\n\n## What Happened\n\nBuilt the SME v4.2\n', 'utf-8');
+    '# Session Log\n\n- [inferred] Alex likes warm colors\n\n## What Happened\n\nBuilt the SME v4.2\n', 'utf-8');
 
   const ftd = { 'memory/*.md': 'fact' };
   indexSingleFile(db, ws, path.join(memDir, '2026-02-24.md'), ftd);

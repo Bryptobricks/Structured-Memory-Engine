@@ -71,7 +71,7 @@ MCP server for Claude Code. First write-path (sme_remember).
 - Wider file discovery — CLAUDE.md, agents/*.md, skills/*.md, plans/*.md now indexable via config
 - Auto-index on MCP server startup — index is fresh when Claude Code connects
 - One-shot hook script (`bin/sme-hook.js`) — `index` and `reflect` commands for session lifecycle hooks
-- Owner-personalized tool descriptions — `config.owner` drives "Search JB's memory..." vs generic
+- Owner-personalized tool descriptions — `config.owner` drives "Search {owner}'s memory..." vs generic
 - Zero changes to core modules (store, indexer, recall, retain, reflect)
 
 ### v4.2 — File-Level Type Defaults + Alias Expansion (shipped):

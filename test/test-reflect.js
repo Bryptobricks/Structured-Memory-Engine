@@ -176,8 +176,8 @@ console.log('Test 5: Contradiction detection — true positive');
 console.log('Test 6: Contradiction detection — no false positive');
 {
   const db = createDb();
-  insertChunk(db, { heading: 'Supplement Stack', content: 'JB takes magnesium glycinate 400mg before bed for sleep quality', filePath: 'memory/2026-01-01.md', createdAt: daysAgo(60) });
-  insertChunk(db, { heading: 'Supplement Stack', content: 'JB takes magnesium glycinate 400mg with zinc for better absorption', filePath: 'memory/2026-02-01.md', createdAt: daysAgo(10) });
+  insertChunk(db, { heading: 'Supplement Stack', content: 'Alex takes magnesium glycinate 400mg before bed for sleep quality', filePath: 'memory/2026-01-01.md', createdAt: daysAgo(60) });
+  insertChunk(db, { heading: 'Supplement Stack', content: 'Alex takes magnesium glycinate 400mg with zinc for better absorption', filePath: 'memory/2026-02-01.md', createdAt: daysAgo(10) });
 
   const result = detectContradictions(db, { dryRun: false });
   assert(result.newFlags === 0, `Expected 0 contradictions (no negation), got ${result.newFlags}`);

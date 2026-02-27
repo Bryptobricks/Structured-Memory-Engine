@@ -57,7 +57,7 @@ function seedFixture(db) {
   // Work — action item
   insertChunk(db, { content: 'Send Jason fund flow doc with pool health plan, incentive APRs, duration, contingency.', heading: 'Action Items', entities: JSON.stringify(['Jason', 'Avalon']), chunkType: 'fact', confidence: 1.0, createdAt: daysAgo(3), filePath: 'memory/2026-02-24.md' });
   // Personal — preference
-  insertChunk(db, { content: 'JB prefers minimal, solid, dark aesthetic. Warm, dim, red-amber lighting tones.', heading: 'Preferences', entities: JSON.stringify(['JB']), chunkType: 'preference', confidence: 1.0, createdAt: daysAgo(43), filePath: 'USER.md', fileWeight: 1.3 });
+  insertChunk(db, { content: 'Alex prefers minimal, solid, dark aesthetic. Warm, dim, red-amber lighting tones.', heading: 'Preferences', entities: JSON.stringify(['Alex']), chunkType: 'preference', confidence: 1.0, createdAt: daysAgo(43), filePath: 'USER.md', fileWeight: 1.3 });
   // Old event
   insertChunk(db, { content: 'ETHDenver trip Feb 17-21. Hotel: Grand Hyatt Denver.', heading: 'ETHDenver', entities: JSON.stringify(['ETHDenver']), chunkType: 'fact', confidence: 0.8, createdAt: daysAgo(16), filePath: 'MEMORY.md', fileWeight: 1.5 });
   // Technical — recent
@@ -160,11 +160,11 @@ console.log('Test 7: "What\'s the weather like?" — no relevant memory');
 }
 
 // ─── Test 8: Lighting preferences with entity match ───
-console.log('Test 8: "JB\'s lighting preferences"');
+console.log('Test 8: "Alex\'s lighting preferences"');
 {
   const db = createDb();
   seedFixture(db);
-  const result = getRelevantContext(db, "JB's lighting preferences");
+  const result = getRelevantContext(db, "Alex's lighting preferences");
   assert(result.chunks.length > 0, `Expected chunks, got ${result.chunks.length}`);
   assert(result.chunks[0].content.includes('lighting'), `Expected lighting preference ranked #1, got: ${result.chunks[0].content.slice(0, 60)}`);
   db.close();

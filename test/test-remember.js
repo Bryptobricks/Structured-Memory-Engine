@@ -46,15 +46,15 @@ function createDb(workspace) {
 console.log('Test 1: Creates new file with header');
 {
   const ws = tmpWorkspace();
-  const result = remember(ws, 'JB prefers dark mode', { date: '2026-02-20' });
+  const result = remember(ws, 'Alex prefers dark mode', { date: '2026-02-20' });
 
   assert(result.created === true, `Expected created=true, got ${result.created}`);
   assert(result.filePath.endsWith('2026-02-20.md'), `Expected file ending 2026-02-20.md, got ${result.filePath}`);
-  assert(result.line === '- [fact] JB prefers dark mode', `Expected tagged line, got ${result.line}`);
+  assert(result.line === '- [fact] Alex prefers dark mode', `Expected tagged line, got ${result.line}`);
 
   const content = fs.readFileSync(result.filePath, 'utf-8');
   assert(content.startsWith('# Session Log — 2026-02-20'), `Expected header, got: ${content.slice(0, 40)}`);
-  assert(content.includes('- [fact] JB prefers dark mode'), 'Expected content in file');
+  assert(content.includes('- [fact] Alex prefers dark mode'), 'Expected content in file');
   fs.rmSync(ws, { recursive: true });
 }
 
