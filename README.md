@@ -344,7 +344,7 @@ Returns an engine instance. Options:
 | `context(message, opts)` | `{ text, chunks, tokenEstimate }` | Get relevant context for injection. Options: `maxTokens`, `maxChunks`, `confidenceFloor`, `recencyBoostDays`, `flagContradictions`, `conversationContext`, `queryEmbedding` |
 | `remember(content, opts)` | `{ filePath, created, line }` | Save to daily memory log and auto-index. Options: `tag` (`fact`/`decision`/`pref`/`opinion`/`confirmed`/`inferred`), `date` |
 | `index(opts)` | `{ indexed, skipped, total, cleaned }` | Re-index workspace. Options: `force` |
-| `reflect(opts)` | `{ decay, reinforce, stale, contradictions, prune }` | Run maintenance cycle. Options: `dryRun` |
+| `reflect(opts)` | `{ decay, reinforce, stale, contradictions, prune, entityIndex }` | Run maintenance cycle + entity rebuild. Options: `dryRun` |
 | `status()` | `{ fileCount, chunkCount, files }` | Index statistics |
 | `restore(chunkId)` | `{ restored, newId?, error? }` | Restore archived chunk |
 | `entities(name?)` | `Object` or `Array` | Get entity info by name, or list all entities |

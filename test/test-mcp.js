@@ -119,6 +119,7 @@ console.log('Test 4: handleReflect formatting');
   assert(text.includes('Marked stale:'), 'Expected Marked stale count');
   assert(text.includes('Contradictions:'), 'Expected Contradictions count');
   assert(text.includes('Archived:'), 'Expected Archived count');
+  assert(text.includes('Entities:'), 'Expected Entities count');
   db.close();
   fs.rmSync(ws, { recursive: true });
 }
