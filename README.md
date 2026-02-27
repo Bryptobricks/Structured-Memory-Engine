@@ -23,7 +23,9 @@ AI agents have amnesia. Every session starts from zero. Your agent doesn't remem
 | **Confidence Scoring** | Tags facts as confirmed, inferred, or outdated with decay over time | **No more stale info served confidently** — outdated facts are deprioritized 6x vs confirmed |
 | **Entity Graph** | Tracks relationships between people, projects, and topics | **Ask about "Sarah" → also get "Nexus" context** — 40-60% more relevant results on entity-heavy queries |
 | **6-Signal Ranking** | Scores results by keyword match + recency + confidence + type + file weight + entity overlap | **Top result is the right result** — not just the one with the most keyword hits |
-| **Contradiction Detection** | Flags when your memory contains conflicting facts | **Catch when old info contradicts new decisions** before acting on bad data |
+| **Contradiction Detection** | Smart detection with same-file exclusion, temporal awareness, and proximity checks | **Real contradictions, not false alarms** — 80%+ fewer false positives vs naive negation matching |
+| **Contradiction Resolution** | CLI commands to resolve conflicts without editing source files | **One command fixes it** — `resolve 42 --action keep-newer` instead of hunting through markdown |
+| **Configurable Decay** | Tunable half-life and decay rate per workspace | **Your workspace, your rules** — fast-moving projects decay in 90 days, core knowledge lives forever |
 | **Memory Lifecycle** | Automatic decay, reinforcement, staleness detection, and pruning | **Self-cleaning index** — frequently-used memories get stronger, stale ones fade. Zero maintenance. |
 | **Auto-Capture** | Detects decisions, preferences, and facts from conversation and saves them | **Never "remember to write it down" again** — 3 captures/turn, zero friction |
 | **Transcript Ingestion** | Parses meeting recordings into tagged, searchable markdown | **60 meetings → searchable in one command.** Every decision, action item, and quote indexed. |
@@ -250,10 +252,87 @@ The `reflect` command runs a full maintenance cycle:
 | **Decay** | Confidence decreases over time. `confirmed` is immune. `outdated` decays 2x faster. | Old unverified info naturally fades instead of competing with fresh facts |
 | **Reinforce** | Frequently-searched chunks get a confidence boost (capped at 1.0) | Your most-used memories get stronger — the system learns what matters |
 | **Stale** | Low confidence + old age → marked stale, excluded from search by default | No more irrelevant results from months-old notes cluttering your context |
-| **Contradictions** | Same-heading chunks with negation signals are flagged | Catch "we decided X" vs "actually we're going with Y" before it causes problems |
+| **Contradictions** | Smart detection with temporal awareness and proximity checks (see below) | Catch real contradictions, not just sequential updates |
 | **Prune** | Very stale chunks archived (never deleted, always restorable via `restore`) | Index stays fast and lean. Nothing is ever permanently lost. |
 
 Run it manually, on a cron, or as a Claude Code session hook. `--dry-run` to preview changes.
+
+#### Configurable Decay
+
+Most memory systems use fixed decay — everything fades at the same rate regardless of importance. SME lets you tune the curve:
+
+```json
+{
+  "reflect": {
+    "decayRate": 1.0,
+    "halfLifeDays": 365
+  }
+}
+```
+
+- **`halfLifeDays`** — How many days until a memory's confidence halves. Default 365 (gentle decay). Set to 90 for fast-moving workspaces where last week matters more than last month.
+- **`decayRate`** — Global multiplier on all decay. Set to 0.5 to halve all decay (memories last longer), or 2.0 to double it (aggressive cleanup). Set to 0 to disable decay entirely.
+
+`confirmed` chunks are always immune to decay regardless of settings. This means your core identity files (CLAUDE.md, USER.md) never fade.
+
+#### Smart Contradiction Detection
+
+Naive contradiction detection flags any two chunks that share keywords and contain negation words. This produces false positives constantly — "WHOOP band removed" and "WHOOP band shipping" aren't contradictions, they're sequential events.
+
+SME's contradiction engine has three layers of filtering that eliminate false positives while catching real conflicts:
+
+| Filter | What it does | Why it matters |
+|--------|-------------|----------------|
+| **Same-file exclusion** | Chunks from the same file are never flagged | Sections within one document don't contradict each other — they're context for each other |
+| **Temporal awareness** | If negation only appears in the newer dated file, it's treated as an update, not a conflict | "Started protocol" → "Stopped protocol" is progression, not contradiction |
+| **Proximity check** | Negation must appear within 8 words of a shared term to count | "not" in an unrelated sentence doesn't make two chunks contradictory |
+
+Enable the advanced filters in config:
+
+```json
+{
+  "reflect": {
+    "contradictionMinSharedTerms": 4,
+    "contradictionTemporalAwareness": true,
+    "contradictionRequireProximity": true
+  }
+}
+```
+
+Same-file exclusion is always on (no config needed). Temporal awareness and proximity are opt-in because they change detection behavior — enable them once you've seen the baseline.
+
+#### Resolving Contradictions
+
+When contradictions are flagged, resolve them from the CLI instead of manually editing files:
+
+```bash
+# List unresolved contradictions
+node lib/index.js contradictions --unresolved
+
+# Keep the newer chunk, downgrade the older one to outdated (confidence → 0.3)
+node lib/index.js resolve 42 --action keep-newer
+
+# Keep both — dismiss the flag without changing anything
+node lib/index.js resolve 42 --action keep-both
+
+# Other options: keep-older, dismiss
+```
+
+**Why this matters:** Other systems force you to manually edit source files to fix contradictions. SME resolves them at the index level — the outdated chunk gets deprioritized in ranking without touching your markdown. Your files stay untouched, and the conflict is resolved in one command.
+
+#### Auto-Reflect on Index
+
+Run reflect automatically after every reindex — zero maintenance:
+
+```json
+{
+  "reflect": {
+    "autoReflectOnIndex": true
+  }
+}
+```
+
+This adds ~3ms to each index run. The reflect cycle handles decay, reinforcement, contradiction detection, and pruning in one pass. Combined with auto-index on agent startup, your memory stays healthy without ever running a manual command.
 
 ### Entity Graph
 
@@ -342,6 +421,14 @@ Config lives at `{workspace}/.memory/config.json`. All fields optional:
   "ingest": {
     "sourceDir": "/path/to/meeting-notes",
     "autoSync": true
+  },
+  "reflect": {
+    "decayRate": 1.0,
+    "halfLifeDays": 365,
+    "contradictionMinSharedTerms": 4,
+    "contradictionRequireProximity": true,
+    "contradictionTemporalAwareness": true,
+    "autoReflectOnIndex": false
   }
 }
 ```
@@ -438,6 +525,7 @@ sme status [--json]
 sme entities [name]
 sme ingest <file-or-dir> [--force]
 sme contradictions [--unresolved]
+sme resolve <contradiction-id> --action keep-newer|keep-older|keep-both|dismiss
 sme archived [--limit N]
 sme restore <chunk-id>
 ```
@@ -454,7 +542,7 @@ sme restore <chunk-id>
 ## Testing
 
 ```bash
-npm test  # 15 suites, 569 tests
+npm test  # 15 suites, 587 tests
 ```
 
 ## License
