@@ -132,25 +132,73 @@ to retrieve relevant memory. Incorporate the returned context silently.
 
 ### OpenClaw (Drop-In Plugin)
 
-Replace the default memory backend. One config change:
+Replace the default memory backend in 3 steps:
+
+**Step 1: Install extension dependencies**
+
+```bash
+cd extensions/memory-sme
+npm install
+npm link structured-memory-engine   # links to the parent package
+```
+
+> **Why?** The plugin runs in OpenClaw's process but needs to resolve `@sinclair/typebox` and `structured-memory-engine` from its own directory. The `npm link` creates a symlink to the parent SME package so `require('structured-memory-engine')` works.
+
+**Step 2: Patch your OpenClaw config**
 
 ```json
 {
   "plugins": {
-    "load": { "paths": ["/path/to/Structured-Memory-Engine/extensions"] },
-    "slots": { "memory": "memory-sme" },
-    "config": {
+    "load": {
+      "paths": ["/path/to/Structured-Memory-Engine/extensions"]
+    },
+    "slots": {
+      "memory": "memory-sme"
+    },
+    "entries": {
       "memory-sme": {
-        "autoRecall": true,
-        "autoRecallMaxTokens": 1500,
-        "autoCapture": true
+        "enabled": true,
+        "config": {
+          "workspace": "/path/to/your/workspace",
+          "autoRecall": true,
+          "autoRecallMaxTokens": 2000,
+          "autoCapture": true,
+          "autoIndex": true
+        }
       }
     }
   }
 }
 ```
 
-Auto-recall and auto-capture are enabled by default. Your agent gets persistent memory with zero code changes.
+**Step 3: Restart OpenClaw**
+
+```bash
+openclaw gateway restart
+```
+
+Verify with `openclaw status` — you should see:
+```
+│ Memory │ enabled (plugin memory-sme) │
+```
+
+And in the logs:
+```
+memory-sme: indexed 51 files (51 total)
+memory-sme: plugin registered (workspace: ..., autoRecall: true, autoCapture: true)
+```
+
+**What it does once installed:**
+- **Auto-recall** injects relevant memories before every agent turn (you'll see `## Recalled Context` blocks)
+- **Auto-capture** detects decisions, preferences, and facts from user messages and saves them
+- **Auto-index** re-indexes your workspace on every gateway restart
+- Replaces the built-in `memory_search`, `memory_remember`, and `memory_reflect` tools with SME-powered versions
+
+**Troubleshooting:**
+- `Cannot find module '@sinclair/typebox'` → Run `npm install` inside `extensions/memory-sme/`
+- `Cannot find module 'structured-memory-engine'` → Run `npm link structured-memory-engine` inside `extensions/memory-sme/`
+- `api.register is not a function` → You have an old version of the plugin. The plugin must export an **object** with a `register(api)` method, not a function.
+- `Cannot read properties of undefined (reading 'trim')` → `registerService` needs an `id` field. Update to the latest plugin code.
 
 ### Node.js API (Embed Anywhere)
 

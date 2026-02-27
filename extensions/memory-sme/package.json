@@ -2,15 +2,13 @@
   "name": "@openclaw/memory-sme",
   "version": "1.0.0",
   "private": true,
-  "description": "OpenClaw memory plugin backed by Structured Memory Engine — FTS5, confidence scoring, decay, contradiction detection",
+  "description": "OpenClaw memory plugin backed by Structured Memory Engine",
   "type": "module",
-  "peerDependencies": {
-    "openclaw": ">=2026.1.26"
-  },
+  "main": "index.ts",
   "dependencies": {
-    "structured-memory-engine": "^5.1.0"
+    "@sinclair/typebox": "^0.34.0"
   },
-  "openclaw": {
-    "extensions": ["./index.ts"]
+  "peerDependencies": {
+    "structured-memory-engine": ">=5.0.0"
   }
 }
