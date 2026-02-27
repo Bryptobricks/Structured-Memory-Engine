@@ -25,6 +25,15 @@ const CAPTURE_TRIGGERS = [
 
 function shouldCapture(text: string): string | null {
   if (!text || text.length < 20) return null;
+  // Skip system messages, cron heartbeats, media metadata, recalled context blocks
+  if (/^\s*System:\s*\[/i.test(text)) return null;
+  if (/HEARTBEAT_OK/i.test(text)) return null;
+  if (/^\s*\[media attached/i.test(text)) return null;
+  if (/^\s*## Recalled Context/i.test(text)) return null;
+  if (/Cron:|scheduled reminder|handle this reminder/i.test(text)) return null;
+  if (/inbound\/file_\d+---/i.test(text)) return null;
+  if (/To send an image back/i.test(text)) return null;
+  // Skip questions
   if (/^\s*(what|how|why|when|where|who|can|could|should|would|is|are|do|does)\b/i.test(text) && text.includes("?")) return null;
   if (/^(hi|hey|hello|thanks|ok|sure|got it|sounds good)/i.test(text.trim())) return null;
 
