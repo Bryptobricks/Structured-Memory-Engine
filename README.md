@@ -358,7 +358,7 @@ See [skills/structured-memory-engine/SKILL.md](skills/structured-memory-engine/S
 ## Testing
 
 ```bash
-npm test  # 9 suites, 373 assertions
+npm test  # 9 suites, 375 assertions
 ```
 
 ## License
