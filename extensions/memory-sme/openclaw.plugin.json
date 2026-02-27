@@ -1,0 +1,27 @@
+{
+  "id": "memory-sme",
+  "kind": "memory",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "workspace": {
+        "type": "string",
+        "description": "SME workspace path (default: agent workspace)"
+      },
+      "fileTypeDefaults": {
+        "type": "object",
+        "description": "Map file patterns to chunk types"
+      },
+      "reflectInterval": {
+        "type": "string",
+        "description": "Auto-reflect interval (e.g. '6h', '12h')"
+      },
+      "autoIndex": {
+        "type": "boolean",
+        "default": true,
+        "description": "Index on startup"
+      }
+    }
+  }
+}

@@ -202,6 +202,58 @@ node lib/index.js status --json
 
 Pipe into `jq`, feed to a Telegram bot, call from a cron job, integrate with any AI agent — SME doesn't care what's on the other end.
 
+## Node.js API
+
+Use SME as an importable module — no CLI, no MCP, no stdio. Three lines to a working memory engine.
+
+```js
+const sme = require('structured-memory-engine');
+const engine = sme.create({ workspace: '/path/to/workspace' });
+
+// Search memory
+const results = engine.query('aave health factor', { limit: 5, type: 'confirmed' });
+
+// Write a memory (immediately indexed and searchable)
+engine.remember('decided to skip bromantane today', { tag: 'decision' });
+
+// Re-index workspace files
+const stats = engine.index({ force: false });
+
+// Run memory maintenance cycle
+const cycle = engine.reflect({ dryRun: true });
+
+// Check index health
+const status = engine.status();
+
+// Restore an archived chunk
+engine.restore(chunkId);
+
+// Clean up when done
+engine.close();
+```
+
+### `create(options)`
+
+Returns an engine instance. Options:
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `workspace` | `process.cwd()` | Path to workspace root (will create `.memory/` inside it) |
+
+### Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `query(text, opts)` | `Array` of ranked results | Search memory. Options: `limit`, `since`, `context`, `type`, `chunkType`, `minConfidence`, `includeStale` |
+| `remember(content, opts)` | `{ filePath, created, line }` | Save to daily memory log and auto-index. Options: `tag` (`fact`/`decision`/`pref`/`opinion`/`confirmed`/`inferred`), `date` |
+| `index(opts)` | `{ indexed, skipped, total, cleaned }` | Re-index workspace. Options: `force` |
+| `reflect(opts)` | `{ decay, reinforce, stale, contradictions, prune }` | Run maintenance cycle. Options: `dryRun` |
+| `status()` | `{ fileCount, chunkCount, files }` | Index statistics |
+| `restore(chunkId)` | `{ restored, newId?, error? }` | Restore archived chunk |
+| `close()` | — | Close database handle |
+
+All methods return raw data objects — no MCP formatting, no string wrapping. Integrate with anything.
+
 ## Fact tagging (v2)
 
 Tag lines in your markdown for structured extraction:
@@ -273,10 +325,40 @@ SME keeps its index clean automatically:
 5. **Archive, never delete** — pruned memories are recoverable via `restore`
 6. **Self-cleaning** — orphan detection, write-path verification, startup health checks
 
+## OpenClaw Integration
+
+SME ships with two integration paths for [OpenClaw](https://github.com/openclaw/openclaw):
+
+### Path 1: Memory Plugin (drop-in replacement)
+
+Replace `memory-core` with SME. One config change, instant upgrade.
+
+```json
+{
+  "plugins": {
+    "load": { "paths": ["/path/to/Structured-Memory-Engine/extensions"] },
+    "slots": { "memory": "memory-sme" }
+  }
+}
+```
+
+Registers `memory_search`, `memory_get`, `memory_remember`, `memory_reflect`. Auto-indexes on startup. See [extensions/memory-sme/README.md](extensions/memory-sme/README.md) for full setup.
+
+### Path 2: Skill (try before you commit)
+
+Install as a ClawHub skill for CLI-based access without replacing the memory slot:
+
+```bash
+export SME_PATH="/path/to/Structured-Memory-Engine"
+export SME_WORKSPACE="$HOME/.openclaw/workspace"
+```
+
+See [skills/structured-memory-engine/SKILL.md](skills/structured-memory-engine/SKILL.md) for available commands.
+
 ## Testing
 
 ```bash
-npm test  # 8 suites, 329 assertions
+npm test  # 9 suites, 373 assertions
 ```
 
 ## License

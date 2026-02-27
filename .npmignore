@@ -1,0 +1,9 @@
+test/
+test-fixture/
+extensions/
+skills/
+.memory/
+.git/
+.gitignore
+ROADMAP.md
+package-lock.json

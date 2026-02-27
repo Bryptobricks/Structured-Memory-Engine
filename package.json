@@ -2,20 +2,51 @@
   "name": "structured-memory-engine",
   "version": "4.2.1",
   "description": "Structured memory engine with MCP server for Claude Code — SQLite FTS5",
-  "main": "lib/index.js",
+  "main": "lib/api.js",
+  "exports": {
+    ".": "./lib/api.js",
+    "./mcp": "./lib/mcp-server.js"
+  },
   "scripts": {
     "index": "node lib/index.js index",
     "query": "node lib/index.js query",
     "status": "node lib/index.js status",
     "mcp": "node lib/mcp-server.js",
-    "test": "node test/test-store.js && node test/test-retain.js && node test/test-reflect.js && node test/test-recall.js && node test/test-indexer.js && node test/test-remember.js && node test/test-mcp.js && node test/test-config.js"
+    "test": "node test/test-store.js && node test/test-retain.js && node test/test-reflect.js && node test/test-recall.js && node test/test-indexer.js && node test/test-remember.js && node test/test-mcp.js && node test/test-config.js && node test/test-api.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.0",
     "better-sqlite3": "^11.8.1"
   },
+  "bin": {
+    "sme": "lib/index.js"
+  },
+  "files": [
+    "lib/",
+    "bin/",
+    "examples/",
+    "README.md",
+    "LICENSE",
+    "SKILL.md"
+  ],
+  "keywords": [
+    "memory",
+    "ai",
+    "agent",
+    "mcp",
+    "sqlite",
+    "fts5",
+    "knowledge-base",
+    "claude",
+    "openclaw",
+    "structured-memory"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chainseeker44/Structured-Memory-Engine.git"
+  },
   "engines": {
     "node": ">=18"
-  },
-  "private": true
+  }
 }
