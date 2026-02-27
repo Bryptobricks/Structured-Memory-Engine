@@ -194,9 +194,9 @@ console.log('Test 5: search');
   // Insert test chunks via raw SQL for precise control
   const insert = db.prepare(`INSERT INTO chunks (file_path, heading, content, line_start, line_end, entities, chunk_type, confidence, created_at, indexed_at, file_weight, access_count, last_accessed, stale)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1.0, 0, NULL, ?)`);
-  insert.run('a.md', 'H1', 'bromantane sublingual dosing protocol', 1, 5, '[]', 'confirmed', 1.0, now, now, 0);
+  insert.run('a.md', 'H1', 'creatine sublingual dosing protocol', 1, 5, '[]', 'confirmed', 1.0, now, now, 0);
   insert.run('b.md', 'H2', 'magnesium glycinate before bed', 1, 5, '[]', 'fact', 0.8, now, now, 0);
-  insert.run('c.md', 'H3', 'stale bromantane reference from old data', 1, 5, '[]', 'outdated', 0.3, oldDate, now, 1);
+  insert.run('c.md', 'H3', 'stale creatine reference from old data', 1, 5, '[]', 'outdated', 0.3, oldDate, now, 1);
   insert.run('d.md', 'H4', 'old magnesium note from 2025', 1, 5, '[]', 'inferred', 0.7, oldDate, now, 0);
   db.prepare('INSERT INTO files (file_path, mtime_ms, chunk_count, indexed_at) VALUES (?, ?, 1, ?)').run('a.md', 1, now);
   db.prepare('INSERT INTO files (file_path, mtime_ms, chunk_count, indexed_at) VALUES (?, ?, 1, ?)').run('b.md', 1, now);
@@ -204,12 +204,12 @@ console.log('Test 5: search');
   db.prepare('INSERT INTO files (file_path, mtime_ms, chunk_count, indexed_at) VALUES (?, ?, 1, ?)').run('d.md', 1, now);
 
   // Basic search
-  const basic = search(db, 'bromantane');
+  const basic = search(db, 'creatine');
   assert(basic.length === 1, `Basic search: expected 1 (stale excluded), got ${basic.length}`);
-  assert(basic[0].file_path === 'a.md', 'Should find non-stale bromantane');
+  assert(basic[0].file_path === 'a.md', 'Should find non-stale creatine');
 
   // includeStale
-  const withStale = search(db, 'bromantane', { includeStale: true });
+  const withStale = search(db, 'creatine', { includeStale: true });
   assert(withStale.length === 2, `With stale: expected 2, got ${withStale.length}`);
 
   // Type filter
@@ -235,7 +235,7 @@ console.log('Test 5: search');
 
   // skipTracking — search still returns results but does not increment access_count
   const beforeSkip = db.prepare("SELECT access_count FROM chunks WHERE file_path = 'a.md'").get();
-  const skipResult = search(db, 'bromantane', { skipTracking: true });
+  const skipResult = search(db, 'creatine', { skipTracking: true });
   assert(skipResult.length === 1, `skipTracking: expected 1 result, got ${skipResult.length}`);
   const afterSkip = db.prepare("SELECT access_count FROM chunks WHERE file_path = 'a.md'").get();
   assert(afterSkip.access_count === beforeSkip.access_count, `skipTracking: access_count should not change, was ${beforeSkip.access_count}, now ${afterSkip.access_count}`);

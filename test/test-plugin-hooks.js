@@ -69,19 +69,19 @@ console.log('Test 1: Auto-recall returns formatted context for a real prompt');
 {
   const db = createDb();
   insertChunk(db, {
-    content: 'MovePosition will be the primary lending protocol on Movement.',
-    heading: 'DeFi Strategy',
+    content: 'DataSync will be the primary API gateway on CloudStack.',
+    heading: 'Backend Strategy',
     chunkType: 'decision',
     confidence: 0.95,
-    entities: JSON.stringify(['MovePosition', 'Movement']),
+    entities: JSON.stringify(['DataSync', 'CloudStack']),
     filePath: 'MEMORY.md',
     fileWeight: 1.5,
   });
 
-  const result = getRelevantContext(db, 'What is our lending protocol strategy?');
+  const result = getRelevantContext(db, 'What is our API gateway strategy?');
   assert(result.text.length > 0, `Expected non-empty context, got empty`);
   assert(result.text.includes('## Recalled Context'), 'Expected Recalled Context header');
-  assert(result.text.includes('MovePosition'), 'Expected MovePosition in context');
+  assert(result.text.includes('DataSync'), 'Expected DataSync in context');
   assert(result.chunks.length > 0, `Expected chunks, got ${result.chunks.length}`);
   assert(result.tokenEstimate > 0, `Expected token estimate > 0`);
   db.close();
@@ -101,7 +101,7 @@ console.log('Test 2: Auto-recall skips short prompts (<5 chars)');
   }
 
   // A real prompt should NOT be skipped
-  const realPrompt = 'What did we decide about lending?';
+  const realPrompt = 'What did we decide about the API gateway?';
   assert(realPrompt.length >= 5, 'Real prompt should pass length check');
 
   const result = getRelevantContext(db, realPrompt);
@@ -195,7 +195,7 @@ console.log('Test 7: Auto-recall with no relevant memory returns empty');
 {
   const db = createDb();
   // DB has chunks but none relevant to the query
-  insertChunk(db, { content: 'Meeting with Jason about fund allocation strategy.', chunkType: 'fact' });
+  insertChunk(db, { content: 'Meeting with Tom about resource allocation strategy.', chunkType: 'fact' });
 
   const result = getRelevantContext(db, 'quantum physics research papers');
   assert(result.text === '' || result.chunks.length === 0, 'Expected empty context for irrelevant query');

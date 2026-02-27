@@ -14,13 +14,13 @@ function assert(condition, msg) {
 // Test 1: Tagged facts
 console.log('Test 1: Tagged facts');
 const tagged = `
-[fact] Alex takes bromantane 25mg daily
+[fact] Alex takes creatine 25mg daily
 [decision] Use FTS5 over vector DB
 [pref] No over-engineering
-[opinion] Bromantane is better than Adderall
-[confirmed] Alex's height is 6'5"
-[inferred] Alex prefers warm lighting
-[outdated?] Alex takes 1.75mg retatrutide
+[opinion] Creatine is better than pre-workout
+[confirmed] Alex's timezone is PST
+[inferred] Alex prefers dark mode
+[outdated?] Alex takes 1.75mg fish oil
 `.trim();
 
 const facts1 = extractFacts(tagged, 'test.md');
@@ -48,7 +48,7 @@ const headings = `
 - FTS5 for search
 
 ## What I Learned
-- Bromantane upregulates TH
+- Creatine improves ATP production
 
 ## Random Section
 - This should NOT be extracted
@@ -61,10 +61,10 @@ assert(facts3[2].type === 'fact', `Expected 'fact' from Learned heading, got '${
 
 // Test 4: Entity extraction
 console.log('Test 4: Entity extraction');
-const entities = `[fact] **Bromantane** from @Chemyo is great`;
+const entities = `[fact] **Creatine** from @SupplyCo is great`;
 const facts4 = extractFacts(entities, 'test.md');
-assert(facts4[0].entities.includes('Bromantane'), `Expected entity 'Bromantane'`);
-assert(facts4[0].entities.includes('@Chemyo'), `Expected entity '@Chemyo'`);
+assert(facts4[0].entities.includes('Creatine'), `Expected entity 'Creatine'`);
+assert(facts4[0].entities.includes('@SupplyCo'), `Expected entity '@SupplyCo'`);
 
 // Test 5: Dedup (tagged line under known heading shouldn't double-count)
 console.log('Test 5: No double-count for tagged lines under headings');

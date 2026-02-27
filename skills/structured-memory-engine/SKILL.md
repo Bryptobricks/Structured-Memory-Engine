@@ -34,8 +34,8 @@ Find memories by keyword with ranked results:
 
 ```bash
 bash scripts/sme-query.sh "search terms"
-bash scripts/sme-query.sh "aave health factor" --limit 5 --since 7d
-bash scripts/sme-query.sh "supplement protocol" --type confirmed --min-confidence 0.8
+bash scripts/sme-query.sh "database connection pooling" --limit 5 --since 7d
+bash scripts/sme-query.sh "deployment pipeline" --type confirmed --min-confidence 0.8
 ```
 
 Options: `--limit N`, `--since 7d|2w|3m|1y|YYYY-MM-DD`, `--type fact|confirmed|inferred|...`, `--min-confidence 0.0-1.0`, `--include-stale`
@@ -48,7 +48,7 @@ Save a fact, decision, or preference:
 
 ```bash
 node scripts/sme-remember.js "decided to use FTS5 over vector search" decision
-node scripts/sme-remember.js "takes bromantane 25mg daily" fact
+node scripts/sme-remember.js "team standup moved to 9am" fact
 node scripts/sme-remember.js "prefers dark terminal themes" pref
 ```
 

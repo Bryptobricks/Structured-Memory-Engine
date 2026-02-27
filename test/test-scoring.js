@@ -171,17 +171,17 @@ console.log('Test 8: normalizeFtsScores');
 console.log('Test 9: extractQueryTerms');
 {
   // Basic extraction — stopwords removed, 2+ char filter
-  const terms = extractQueryTerms('what is the bromantane dosing protocol?');
-  assert(terms.includes('bromantane'), 'Should include bromantane');
+  const terms = extractQueryTerms('what is the creatine dosing protocol?');
+  assert(terms.includes('creatine'), 'Should include creatine');
   assert(terms.includes('dosing'), 'Should include dosing');
   assert(terms.includes('protocol'), 'Should include protocol');
   assert(!terms.includes('is'), 'Should not include stopword "is"');
   assert(!terms.includes('the'), 'Should not include stopword "the"');
 
   // Proper noun extraction
-  const withProper = extractQueryTerms('Send Jason the ETHDenver details');
-  assert(withProper.includes('jason'), 'Should include proper noun Jason (lowercased)');
-  assert(withProper.includes('ethdenver'), 'Should include proper noun ETHDenver (lowercased)');
+  const withProper = extractQueryTerms('Send Tom the TechConf details');
+  assert(withProper.includes('tom'), 'Should include proper noun Tom (lowercased)');
+  assert(withProper.includes('techconf'), 'Should include proper noun TechConf (lowercased)');
 
   // Empty input
   const empty = extractQueryTerms('');
@@ -244,9 +244,9 @@ console.log('Test 12: CIL pipeline does not inflate access_count (skipTracking)'
 {
   const db = createDb();
   insertChunk(db, {
-    content: 'Bromantane 25mg sublingual started Feb 23.',
-    heading: 'Bromantane Tracking',
-    entities: JSON.stringify(['bromantane']),
+    content: 'Creatine 5g daily started Feb 23.',
+    heading: 'Creatine Tracking',
+    entities: JSON.stringify(['creatine']),
     chunkType: 'fact',
     confidence: 1.0,
     createdAt: daysAgo(4),
@@ -255,7 +255,7 @@ console.log('Test 12: CIL pipeline does not inflate access_count (skipTracking)'
   });
 
   // Run CIL pipeline
-  const result = getRelevantContext(db, "How's the bromantane experiment going?");
+  const result = getRelevantContext(db, "How's the creatine experiment going?");
   assert(result.chunks.length > 0, `CIL should find chunks, got ${result.chunks.length}`);
 
   // Access count should still be 0 — CIL uses skipTracking
@@ -274,17 +274,17 @@ console.log('Test 13: Entity cache invalidation');
 
   const db = createDb();
   insertChunk(db, {
-    content: 'Jason sent the fund flow doc',
-    entities: JSON.stringify(['Jason']),
+    content: 'Tom sent the project roadmap',
+    entities: JSON.stringify(['Tom']),
     chunkType: 'fact',
   });
 
   // First call should build entity cache from scratch
-  const result1 = getRelevantContext(db, 'What did Jason send?');
+  const result1 = getRelevantContext(db, 'What did Tom send?');
   assert(result1.chunks.length > 0, 'Should find chunks after cache invalidation');
 
   // Second call should use cached entities
-  const result2 = getRelevantContext(db, 'What did Jason send?');
+  const result2 = getRelevantContext(db, 'What did Tom send?');
   assert(result2.chunks.length > 0, 'Should find chunks from cached entities');
 
   // Invalidate again
@@ -292,13 +292,13 @@ console.log('Test 13: Entity cache invalidation');
 
   // Add new entity
   insertChunk(db, {
-    content: 'Avalon pool health monitoring needs alerts',
-    entities: JSON.stringify(['Avalon']),
+    content: 'Nexus API health monitoring needs alerts',
+    entities: JSON.stringify(['Nexus']),
     chunkType: 'decision',
   });
 
   // After invalidation, new entity should be picked up
-  const result3 = getRelevantContext(db, 'What about Avalon?');
+  const result3 = getRelevantContext(db, 'What about Nexus?');
   assert(result3.chunks.length > 0, 'Should find new entity after cache invalidation');
 
   db.close();

@@ -159,8 +159,8 @@ console.log('Test 4: Prune stale chunks');
 console.log('Test 5: Contradiction detection — true positive');
 {
   const db = createDb();
-  insertChunk(db, { heading: 'Daily Protocol', content: 'takes bromantane sublingual daily morning protocol for focus energy', filePath: 'memory/2026-01-01.md', createdAt: daysAgo(60) });
-  insertChunk(db, { heading: 'Daily Protocol', content: 'stopped bromantane sublingual daily morning protocol due tolerance', filePath: 'memory/2026-02-01.md', createdAt: daysAgo(10) });
+  insertChunk(db, { heading: 'Daily Protocol', content: 'takes creatine sublingual daily morning protocol for focus energy', filePath: 'memory/2026-01-01.md', createdAt: daysAgo(60) });
+  insertChunk(db, { heading: 'Daily Protocol', content: 'stopped creatine sublingual daily morning protocol due tolerance', filePath: 'memory/2026-02-01.md', createdAt: daysAgo(10) });
 
   const result = detectContradictions(db, { dryRun: false });
   assert(result.newFlags === 1, `Expected 1 contradiction, got ${result.newFlags}`);
@@ -216,16 +216,16 @@ console.log('Test 7: Dry run — no DB mutations');
 console.log('Test 8: Search excludes stale by default');
 {
   const db = createDb();
-  insertChunk(db, { content: 'bromantane supplement protocol', stale: 0 });
-  insertChunk(db, { content: 'bromantane old outdated protocol', stale: 1 });
+  insertChunk(db, { content: 'creatine supplement protocol', stale: 0 });
+  insertChunk(db, { content: 'creatine old outdated protocol', stale: 1 });
 
   // Default: excludes stale
   const { search } = require('../lib/store');
-  const normal = search(db, '"bromantane"', { includeStale: false });
+  const normal = search(db, '"creatine"', { includeStale: false });
   assert(normal.length === 1, `Expected 1 result excluding stale, got ${normal.length}`);
 
   // With includeStale
-  const withStale = search(db, '"bromantane"', { includeStale: true });
+  const withStale = search(db, '"creatine"', { includeStale: true });
   assert(withStale.length === 2, `Expected 2 results including stale, got ${withStale.length}`);
   db.close();
 }
@@ -287,8 +287,8 @@ console.log('Test 11: Generic headings skipped in contradiction detection');
 {
   const db = createDb();
   // "Overview" is a generic heading — should NOT trigger contradiction even with negation + shared terms
-  insertChunk(db, { heading: 'Overview', content: 'project uses bromantane protocol daily morning routine for focus energy', filePath: 'agents/alpha.md', createdAt: daysAgo(60) });
-  insertChunk(db, { heading: 'Overview', content: 'project stopped bromantane protocol daily morning routine due tolerance', filePath: 'agents/beta.md', createdAt: daysAgo(10) });
+  insertChunk(db, { heading: 'Overview', content: 'project uses creatine protocol daily morning routine for focus energy', filePath: 'agents/alpha.md', createdAt: daysAgo(60) });
+  insertChunk(db, { heading: 'Overview', content: 'project stopped creatine protocol daily morning routine due tolerance', filePath: 'agents/beta.md', createdAt: daysAgo(10) });
 
   const result = detectContradictions(db, { dryRun: false });
   assert(result.newFlags === 0, `Expected 0 contradictions for generic heading "Overview", got ${result.newFlags}`);
@@ -300,8 +300,8 @@ console.log('Test 12: Near-duplicate chunks not flagged as contradictions');
 {
   const db = createDb();
   // Nearly identical content with a negation word — should be caught by divergence check
-  insertChunk(db, { heading: 'Daily Protocol', content: 'takes bromantane sublingual daily morning protocol focus energy stack', filePath: 'memory/2026-01-01.md', createdAt: daysAgo(60) });
-  insertChunk(db, { heading: 'Daily Protocol', content: 'not takes bromantane sublingual daily morning protocol focus energy stack', filePath: 'memory/2026-02-01.md', createdAt: daysAgo(10) });
+  insertChunk(db, { heading: 'Daily Protocol', content: 'takes creatine sublingual daily morning protocol focus energy stack', filePath: 'memory/2026-01-01.md', createdAt: daysAgo(60) });
+  insertChunk(db, { heading: 'Daily Protocol', content: 'not takes creatine sublingual daily morning protocol focus energy stack', filePath: 'memory/2026-02-01.md', createdAt: daysAgo(10) });
 
   const result = detectContradictions(db, { dryRun: false });
   assert(result.newFlags === 0, `Expected 0 for near-duplicate with high overlap, got ${result.newFlags}`);
@@ -328,8 +328,8 @@ console.log('Test 14: Heading in exactly 2 files still checked');
 {
   const db = createDb();
   // Same heading in only 2 files — should still detect contradiction
-  insertChunk(db, { heading: 'Daily Protocol', content: 'takes bromantane sublingual daily morning protocol for focus energy', filePath: 'memory/2026-01-01.md', createdAt: daysAgo(60) });
-  insertChunk(db, { heading: 'Daily Protocol', content: 'stopped bromantane sublingual daily morning protocol due tolerance', filePath: 'memory/2026-02-01.md', createdAt: daysAgo(10) });
+  insertChunk(db, { heading: 'Daily Protocol', content: 'takes creatine sublingual daily morning protocol for focus energy', filePath: 'memory/2026-01-01.md', createdAt: daysAgo(60) });
+  insertChunk(db, { heading: 'Daily Protocol', content: 'stopped creatine sublingual daily morning protocol due tolerance', filePath: 'memory/2026-02-01.md', createdAt: daysAgo(10) });
 
   const result = detectContradictions(db, { dryRun: false });
   assert(result.newFlags === 1, `Expected 1 contradiction for heading in 2 files, got ${result.newFlags}`);

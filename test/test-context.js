@@ -46,93 +46,93 @@ function daysAgo(n) {
 }
 
 function seedFixture(db) {
-  // Health protocol — active
-  insertChunk(db, { content: 'Bromantane 25mg sublingual started Feb 23. Day 1: 6hr peak focus, appetite suppression, calm tunnel vision.', heading: 'Bromantane Tracking', entities: JSON.stringify(['bromantane']), chunkType: 'fact', confidence: 1.0, createdAt: daysAgo(4), filePath: 'MEMORY.md', fileWeight: 1.5 });
-  // Health protocol — superseded
-  insertChunk(db, { content: 'Retatrutide currently 1.75mg per week, will reduce to 1.5mg.', heading: 'Health', entities: JSON.stringify(['retatrutide']), chunkType: 'fact', confidence: 0.6, createdAt: daysAgo(17), filePath: 'MEMORY.md', fileWeight: 1.5 });
-  // Health protocol — current
-  insertChunk(db, { content: 'Retatrutide reduced to 1.5mg per week as of Feb 16. Weight: 197 lbs.', heading: 'Health', entities: JSON.stringify(['retatrutide']), chunkType: 'confirmed', confidence: 1.0, createdAt: daysAgo(11), filePath: 'MEMORY.md', fileWeight: 1.5 });
+  // Daily routine — active
+  insertChunk(db, { content: 'Creatine 5g daily started Feb 23. Day 1: improved recovery, better energy during afternoon workouts.', heading: 'Creatine Tracking', entities: JSON.stringify(['creatine']), chunkType: 'fact', confidence: 1.0, createdAt: daysAgo(4), filePath: 'MEMORY.md', fileWeight: 1.5 });
+  // Config — superseded
+  insertChunk(db, { content: 'Redis cache TTL currently 300s, will reduce to 120s.', heading: 'Infrastructure', entities: JSON.stringify(['redis']), chunkType: 'fact', confidence: 0.6, createdAt: daysAgo(17), filePath: 'MEMORY.md', fileWeight: 1.5 });
+  // Config — current
+  insertChunk(db, { content: 'Redis cache TTL reduced to 120s as of Feb 16. P99 latency: 45ms.', heading: 'Infrastructure', entities: JSON.stringify(['redis']), chunkType: 'confirmed', confidence: 1.0, createdAt: daysAgo(11), filePath: 'MEMORY.md', fileWeight: 1.5 });
   // Work — decision
-  insertChunk(db, { content: 'MovePosition will be the primary lending protocol on Movement. Ownership discussions underway — need greater than 51% equity.', heading: 'In-House DeFi', entities: JSON.stringify(['MovePosition', 'Movement']), chunkType: 'decision', confidence: 0.95, createdAt: daysAgo(3), filePath: 'memory/2026-02-24.md' });
+  insertChunk(db, { content: 'DataSync will be the primary API gateway on CloudStack. Architecture review underway — need full test coverage.', heading: 'Backend Services', entities: JSON.stringify(['DataSync', 'CloudStack']), chunkType: 'decision', confidence: 0.95, createdAt: daysAgo(3), filePath: 'memory/2026-02-24.md' });
   // Work — action item
-  insertChunk(db, { content: 'Send Jason fund flow doc with pool health plan, incentive APRs, duration, contingency.', heading: 'Action Items', entities: JSON.stringify(['Jason', 'Avalon']), chunkType: 'fact', confidence: 1.0, createdAt: daysAgo(3), filePath: 'memory/2026-02-24.md' });
+  insertChunk(db, { content: 'Send Tom project roadmap with API health plan, rate limits, timeline, contingency.', heading: 'Action Items', entities: JSON.stringify(['Tom', 'Nexus']), chunkType: 'fact', confidence: 1.0, createdAt: daysAgo(3), filePath: 'memory/2026-02-24.md' });
   // Personal — preference
-  insertChunk(db, { content: 'Alex prefers minimal, solid, dark aesthetic. Warm, dim, red-amber lighting tones.', heading: 'Preferences', entities: JSON.stringify(['Alex']), chunkType: 'preference', confidence: 1.0, createdAt: daysAgo(43), filePath: 'USER.md', fileWeight: 1.3 });
+  insertChunk(db, { content: 'Alex prefers minimal, clean UI design. Dark mode with high contrast.', heading: 'Preferences', entities: JSON.stringify(['Alex']), chunkType: 'preference', confidence: 1.0, createdAt: daysAgo(43), filePath: 'USER.md', fileWeight: 1.3 });
   // Old event
-  insertChunk(db, { content: 'ETHDenver trip Feb 17-21. Hotel: Grand Hyatt Denver.', heading: 'ETHDenver', entities: JSON.stringify(['ETHDenver']), chunkType: 'fact', confidence: 0.8, createdAt: daysAgo(16), filePath: 'MEMORY.md', fileWeight: 1.5 });
+  insertChunk(db, { content: 'TechConf trip Feb 17-21. Hotel: Downtown Marriott.', heading: 'TechConf', entities: JSON.stringify(['TechConf']), chunkType: 'fact', confidence: 0.8, createdAt: daysAgo(16), filePath: 'MEMORY.md', fileWeight: 1.5 });
   // Technical — recent
-  insertChunk(db, { content: 'OpenClaw 200K context cap bug. Opus 4.6 listed as 1M but API enforces 200K. Missing beta header.', heading: 'System', entities: JSON.stringify(['OpenClaw']), chunkType: 'fact', confidence: 1.0, createdAt: daysAgo(1), filePath: 'MEMORY.md', fileWeight: 1.5 });
-  // Crypto — portfolio
-  insertChunk(db, { content: 'Portfolio framework: 80/15/5 crypto/equities/venture. Net worth $2.34M. 67% stabled.', heading: 'Portfolio', entities: JSON.stringify(['portfolio']), chunkType: 'confirmed', confidence: 1.0, createdAt: daysAgo(3), filePath: 'MEMORY.md', fileWeight: 1.5 });
+  insertChunk(db, { content: 'CI pipeline 200s timeout bug. Docs say 600s but runner enforces 200s. Missing config override.', heading: 'System', entities: JSON.stringify(['CI']), chunkType: 'fact', confidence: 1.0, createdAt: daysAgo(1), filePath: 'MEMORY.md', fileWeight: 1.5 });
+  // Project — allocation
+  insertChunk(db, { content: 'Project allocation: 60/30/10 frontend/backend/infrastructure. Team size: 12 engineers.', heading: 'Project', entities: JSON.stringify(['project']), chunkType: 'confirmed', confidence: 1.0, createdAt: daysAgo(3), filePath: 'MEMORY.md', fileWeight: 1.5 });
   // Generic daily noise
   insertChunk(db, { content: 'Checked email. Nothing urgent. Calendar clear until 3pm.', heading: null, entities: '[]', chunkType: 'raw', confidence: 1.0, createdAt: daysAgo(2), filePath: 'memory/2026-02-25.md' });
 }
 
-// ─── Test 1: Bromantane query ───
-console.log('Test 1: "How\'s the bromantane experiment going?"');
+// ─── Test 1: Creatine query ───
+console.log('Test 1: "How\'s the creatine experiment going?"');
 {
   const db = createDb();
   seedFixture(db);
-  const result = getRelevantContext(db, "How's the bromantane experiment going?");
+  const result = getRelevantContext(db, "How's the creatine experiment going?");
   assert(result.chunks.length > 0, `Expected chunks, got ${result.chunks.length}`);
-  assert(result.chunks[0].content.includes('Bromantane'), `Expected Bromantane chunk ranked #1, got: ${result.chunks[0].content.slice(0, 60)}`);
-  // Retatrutide should not be in top 3
+  assert(result.chunks[0].content.includes('Creatine'), `Expected Creatine chunk ranked #1, got: ${result.chunks[0].content.slice(0, 60)}`);
+  // Redis should not be in top 3
   const top3Contents = result.chunks.slice(0, 3).map(c => c.content).join(' ');
-  assert(!top3Contents.toLowerCase().includes('retatrutide'), 'Retatrutide should not be in top 3 for bromantane query');
+  assert(!top3Contents.toLowerCase().includes('redis'), 'Redis should not be in top 3 for creatine query');
   assert(result.text.includes('## Recalled Context'), 'Output should have Recalled Context header');
   assert(result.tokenEstimate > 0, `Token estimate should be > 0, got ${result.tokenEstimate}`);
   db.close();
 }
 
-// ─── Test 2: Lending protocol decision ───
-console.log('Test 2: "What did we decide about the lending protocol?"');
+// ─── Test 2: API gateway decision ───
+console.log('Test 2: "What did we decide about the API gateway?"');
 {
   const db = createDb();
   seedFixture(db);
-  const result = getRelevantContext(db, 'What did we decide about the lending protocol?');
+  const result = getRelevantContext(db, 'What did we decide about the API gateway?');
   assert(result.chunks.length > 0, `Expected chunks, got ${result.chunks.length}`);
-  assert(result.chunks[0].content.includes('MovePosition'), `Expected MovePosition decision ranked #1, got: ${result.chunks[0].content.slice(0, 60)}`);
+  assert(result.chunks[0].content.includes('DataSync'), `Expected DataSync decision ranked #1, got: ${result.chunks[0].content.slice(0, 60)}`);
   db.close();
 }
 
-// ─── Test 3: Entity match — Jason ───
-console.log('Test 3: "What do I need to send Jason?"');
+// ─── Test 3: Entity match — Tom ───
+console.log('Test 3: "What do I need to send Tom?"');
 {
   const db = createDb();
   seedFixture(db);
-  const result = getRelevantContext(db, 'What do I need to send Jason?');
+  const result = getRelevantContext(db, 'What do I need to send Tom?');
   assert(result.chunks.length > 0, `Expected chunks, got ${result.chunks.length}`);
-  assert(result.chunks[0].content.includes('Jason'), `Expected Jason action item ranked #1, got: ${result.chunks[0].content.slice(0, 60)}`);
+  assert(result.chunks[0].content.includes('Tom'), `Expected Tom action item ranked #1, got: ${result.chunks[0].content.slice(0, 60)}`);
   db.close();
 }
 
-// ─── Test 4: Retatrutide — current dose outranks old ───
-console.log('Test 4: "What\'s my current retatrutide dose?"');
+// ─── Test 4: Redis TTL — current value outranks old ───
+console.log('Test 4: "What\'s the current Redis cache TTL?"');
 {
   const db = createDb();
   seedFixture(db);
-  const result = getRelevantContext(db, "What's my current retatrutide dose?");
+  const result = getRelevantContext(db, "What's the current Redis cache TTL?");
   assert(result.chunks.length >= 2, `Expected at least 2 chunks, got ${result.chunks.length}`);
-  assert(result.chunks[0].content.includes('1.5mg'), `Expected 1.5mg (current) ranked #1, got: ${result.chunks[0].content.slice(0, 60)}`);
-  // The superseded 1.75mg should rank lower
-  const idx175 = result.chunks.findIndex(c => c.content.includes('1.75mg'));
-  if (idx175 >= 0) {
-    assert(idx175 > 0, `Superseded 1.75mg should not be #1 (found at index ${idx175})`);
+  assert(result.chunks[0].content.includes('120s'), `Expected 120s (current) ranked #1, got: ${result.chunks[0].content.slice(0, 60)}`);
+  // The superseded 300s should rank lower
+  const idx300 = result.chunks.findIndex(c => c.content.includes('300s'));
+  if (idx300 >= 0) {
+    assert(idx300 > 0, `Superseded 300s should not be #1 (found at index ${idx300})`);
   }
   db.close();
 }
 
-// ─── Test 5: Portfolio query ───
-console.log('Test 5: "Tell me about my portfolio"');
+// ─── Test 5: Project allocation query ───
+console.log('Test 5: "Tell me about the project allocation"');
 {
   const db = createDb();
   seedFixture(db);
-  const result = getRelevantContext(db, 'Tell me about my portfolio');
+  const result = getRelevantContext(db, 'Tell me about the project allocation');
   assert(result.chunks.length > 0, `Expected chunks, got ${result.chunks.length}`);
-  assert(result.chunks[0].content.includes('Portfolio'), `Expected Portfolio chunk ranked #1, got: ${result.chunks[0].content.slice(0, 60)}`);
-  // ETHDenver should not appear
+  assert(result.chunks[0].content.includes('Project'), `Expected Project chunk ranked #1, got: ${result.chunks[0].content.slice(0, 60)}`);
+  // TechConf should not appear
   const allContents = result.chunks.map(c => c.content).join(' ');
-  assert(!allContents.includes('ETHDenver'), 'ETHDenver should not appear in portfolio query');
+  assert(!allContents.includes('TechConf'), 'TechConf should not appear in project allocation query');
   db.close();
 }
 
@@ -159,14 +159,14 @@ console.log('Test 7: "What\'s the weather like?" — no relevant memory');
   db.close();
 }
 
-// ─── Test 8: Lighting preferences with entity match ───
-console.log('Test 8: "Alex\'s lighting preferences"');
+// ─── Test 8: UI design preferences with entity match ───
+console.log('Test 8: "Alex\'s design preferences"');
 {
   const db = createDb();
   seedFixture(db);
-  const result = getRelevantContext(db, "Alex's lighting preferences");
+  const result = getRelevantContext(db, "Alex's design preferences");
   assert(result.chunks.length > 0, `Expected chunks, got ${result.chunks.length}`);
-  assert(result.chunks[0].content.includes('lighting'), `Expected lighting preference ranked #1, got: ${result.chunks[0].content.slice(0, 60)}`);
+  assert(result.chunks[0].content.includes('UI design'), `Expected design preference ranked #1, got: ${result.chunks[0].content.slice(0, 60)}`);
   db.close();
 }
 
@@ -175,14 +175,14 @@ console.log('Test 9: Contradictions flagged in output');
 {
   const db = createDb();
   // Insert contradictory chunks + a contradiction record
-  const id1 = insertChunk(db, { heading: 'Protocol', content: 'takes bromantane sublingual daily morning protocol for focus energy', filePath: 'memory/2026-01-01.md', chunkType: 'fact', confidence: 1.0, createdAt: daysAgo(60) });
-  const id2 = insertChunk(db, { heading: 'Protocol', content: 'stopped bromantane sublingual daily morning protocol due tolerance', filePath: 'memory/2026-02-01.md', chunkType: 'fact', confidence: 1.0, createdAt: daysAgo(10) });
+  const id1 = insertChunk(db, { heading: 'Protocol', content: 'takes creatine supplement daily morning protocol for recovery energy', filePath: 'memory/2026-01-01.md', chunkType: 'fact', confidence: 1.0, createdAt: daysAgo(60) });
+  const id2 = insertChunk(db, { heading: 'Protocol', content: 'stopped creatine supplement daily morning protocol due bloating', filePath: 'memory/2026-02-01.md', chunkType: 'fact', confidence: 1.0, createdAt: daysAgo(10) });
   // Manually insert contradiction record
   db.prepare('INSERT INTO contradictions (chunk_id_old, chunk_id_new, reason, created_at) VALUES (?, ?, ?, ?)').run(
-    Math.min(id1, id2), Math.max(id1, id2), 'Shared terms: bromantane, sublingual; negation detected', new Date().toISOString()
+    Math.min(id1, id2), Math.max(id1, id2), 'Shared terms: creatine, supplement; negation detected', new Date().toISOString()
   );
 
-  const result = getRelevantContext(db, 'bromantane protocol morning focus');
+  const result = getRelevantContext(db, 'creatine protocol morning recovery');
   assert(result.chunks.length >= 2, `Expected at least 2 chunks, got ${result.chunks.length}`);
   assert(result.text.includes('contradictions'), `Expected contradiction flag in output, text: ${result.text.slice(-200)}`);
   db.close();
@@ -193,7 +193,7 @@ console.log('Test 10: Token budget enforcement');
 {
   const db = createDb();
   seedFixture(db);
-  const result = getRelevantContext(db, 'bromantane retatrutide portfolio lending protocol', { maxTokens: 200 });
+  const result = getRelevantContext(db, 'creatine redis project API gateway', { maxTokens: 200 });
   assert(result.tokenEstimate <= 200, `Expected <= 200 tokens, got ${result.tokenEstimate}`);
   assert(result.chunks.length <= 3, `Expected max 3 chunks with tight budget, got ${result.chunks.length}`);
   db.close();
@@ -206,12 +206,12 @@ console.log('Test 11: Conversation context resolves anaphoric reference');
   seedFixture(db);
   // "what about that?" alone would match nothing useful
   const withoutContext = getRelevantContext(db, 'what about that?');
-  // With conversation context mentioning bromantane, it should pull bromantane chunks
+  // With conversation context mentioning creatine, it should pull creatine chunks
   const withContext = getRelevantContext(db, 'what about that?', {
-    conversationContext: ["How's the bromantane experiment going?"],
+    conversationContext: ["How's the creatine experiment going?"],
   });
   assert(withContext.chunks.length > withoutContext.chunks.length ||
-    (withContext.chunks.length > 0 && withContext.chunks[0].content.includes('Bromantane')),
+    (withContext.chunks.length > 0 && withContext.chunks[0].content.includes('Creatine')),
     `Expected conversation context to improve results`);
   db.close();
 }
@@ -221,14 +221,14 @@ console.log('Test 12: Conversation context carries entity from prior turn');
 {
   const db = createDb();
   seedFixture(db);
-  // "and the fund flow?" alone won't match Jason's action item well
-  // But with prior context mentioning Jason, entity match should boost it
-  const result = getRelevantContext(db, 'and the fund flow doc?', {
-    conversationContext: ['What do I need to send Jason?'],
+  // "and the project roadmap?" alone won't match Tom's action item well
+  // But with prior context mentioning Tom, entity match should boost it
+  const result = getRelevantContext(db, 'and the project roadmap?', {
+    conversationContext: ['What do I need to send Tom?'],
   });
   assert(result.chunks.length > 0, `Expected chunks, got ${result.chunks.length}`);
-  const hasJason = result.chunks.some(c => c.content.includes('Jason'));
-  assert(hasJason, 'Expected Jason chunk to appear via conversation context entity match');
+  const hasTom = result.chunks.some(c => c.content.includes('Tom'));
+  assert(hasTom, 'Expected Tom chunk to appear via conversation context entity match');
   db.close();
 }
 
@@ -237,8 +237,8 @@ console.log('Test 13: Empty conversation context has no effect');
 {
   const db = createDb();
   seedFixture(db);
-  const without = getRelevantContext(db, "How's the bromantane experiment going?");
-  const withEmpty = getRelevantContext(db, "How's the bromantane experiment going?", {
+  const without = getRelevantContext(db, "How's the creatine experiment going?");
+  const withEmpty = getRelevantContext(db, "How's the creatine experiment going?", {
     conversationContext: [],
   });
   assert(without.chunks.length === withEmpty.chunks.length, 'Empty context array should not change results');

@@ -49,9 +49,9 @@ function daysAgo(n) {
 console.log('Test 1: Build entity index from chunks');
 {
   const db = createDb();
-  insertChunk(db, { content: 'Send Jason fund flow doc', entities: JSON.stringify(['Jason', 'Avalon']), createdAt: daysAgo(3) });
-  insertChunk(db, { content: 'Jason confirmed the timeline', entities: JSON.stringify(['Jason']), createdAt: daysAgo(1) });
-  insertChunk(db, { content: 'MovePosition lending protocol', entities: JSON.stringify(['MovePosition', 'Movement']), createdAt: daysAgo(2) });
+  insertChunk(db, { content: 'Send Tom project roadmap doc', entities: JSON.stringify(['Tom', 'Nexus']), createdAt: daysAgo(3) });
+  insertChunk(db, { content: 'Tom confirmed the timeline', entities: JSON.stringify(['Tom']), createdAt: daysAgo(1) });
+  insertChunk(db, { content: 'DataSync lending protocol', entities: JSON.stringify(['DataSync', 'CloudStack']), createdAt: daysAgo(2) });
 
   const result = buildEntityIndex(db);
   assert(result.entities >= 3, `Expected at least 3 entities, got ${result.entities}`);
@@ -63,15 +63,15 @@ console.log('Test 1: Build entity index from chunks');
 console.log('Test 2: Query entity returns chunk IDs and co-occurrences');
 {
   const db = createDb();
-  insertChunk(db, { content: 'Send Jason fund flow doc', entities: JSON.stringify(['Jason', 'Avalon']), createdAt: daysAgo(3) });
-  insertChunk(db, { content: 'Jason confirmed the timeline', entities: JSON.stringify(['Jason']), createdAt: daysAgo(1) });
+  insertChunk(db, { content: 'Send Tom project roadmap doc', entities: JSON.stringify(['Tom', 'Nexus']), createdAt: daysAgo(3) });
+  insertChunk(db, { content: 'Tom confirmed the timeline', entities: JSON.stringify(['Tom']), createdAt: daysAgo(1) });
   buildEntityIndex(db);
 
-  const jason = getEntity(db, 'Jason');
-  assert(jason != null, 'Expected Jason entity to exist');
-  assert(jason.mentionCount === 2, `Expected 2 mentions, got ${jason.mentionCount}`);
-  assert(jason.chunkIds.length === 2, `Expected 2 chunk IDs, got ${jason.chunkIds.length}`);
-  assert(jason.coEntities['avalon'] === 1, `Expected Avalon co-occurrence count 1, got ${jason.coEntities['avalon']}`);
+  const tom = getEntity(db, 'Tom');
+  assert(tom != null, 'Expected Tom entity to exist');
+  assert(tom.mentionCount === 2, `Expected 2 mentions, got ${tom.mentionCount}`);
+  assert(tom.chunkIds.length === 2, `Expected 2 chunk IDs, got ${tom.chunkIds.length}`);
+  assert(tom.coEntities['nexus'] === 1, `Expected Nexus co-occurrence count 1, got ${tom.coEntities['nexus']}`);
   db.close();
 }
 
@@ -79,14 +79,14 @@ console.log('Test 2: Query entity returns chunk IDs and co-occurrences');
 console.log('Test 3: Related entities sorted by co-occurrence count');
 {
   const db = createDb();
-  insertChunk(db, { content: 'Alex met Jason at ETHDenver', entities: JSON.stringify(['Alex', 'Jason', 'ETHDenver']) });
-  insertChunk(db, { content: 'Alex and Jason discussed MovePosition', entities: JSON.stringify(['Alex', 'Jason', 'MovePosition']) });
+  insertChunk(db, { content: 'Alex met Tom at TechConf', entities: JSON.stringify(['Alex', 'Tom', 'TechConf']) });
+  insertChunk(db, { content: 'Alex and Tom discussed DataSync', entities: JSON.stringify(['Alex', 'Tom', 'DataSync']) });
   insertChunk(db, { content: 'Alex reviewed the portfolio', entities: JSON.stringify(['Alex']) });
   buildEntityIndex(db);
 
   const related = getRelatedEntities(db, 'Alex');
   assert(related.length >= 1, `Expected at least 1 related entity, got ${related.length}`);
-  assert(related[0].entity === 'jason', `Expected Jason as top co-occurrence, got ${related[0].entity}`);
+  assert(related[0].entity === 'tom', `Expected Tom as top co-occurrence, got ${related[0].entity}`);
   assert(related[0].count === 2, `Expected co-occurrence count 2, got ${related[0].count}`);
   db.close();
 }
@@ -95,8 +95,8 @@ console.log('Test 3: Related entities sorted by co-occurrence count');
 console.log('Test 4: List all entities sorted by mention count');
 {
   const db = createDb();
-  insertChunk(db, { content: 'A', entities: JSON.stringify(['Alex', 'Jason']) });
-  insertChunk(db, { content: 'B', entities: JSON.stringify(['Alex', 'MovePosition']) });
+  insertChunk(db, { content: 'A', entities: JSON.stringify(['Alex', 'Tom']) });
+  insertChunk(db, { content: 'B', entities: JSON.stringify(['Alex', 'DataSync']) });
   insertChunk(db, { content: 'C', entities: JSON.stringify(['Alex']) });
   buildEntityIndex(db);
 
@@ -111,16 +111,16 @@ console.log('Test 4: List all entities sorted by mention count');
 console.log('Test 5: Entity expansion adds co-occurring entities');
 {
   const db = createDb();
-  insertChunk(db, { content: 'A', entities: JSON.stringify(['Jason', 'Avalon']) });
-  insertChunk(db, { content: 'B', entities: JSON.stringify(['Jason', 'Avalon']) });
-  insertChunk(db, { content: 'C', entities: JSON.stringify(['Jason', 'USDA']) });
+  insertChunk(db, { content: 'A', entities: JSON.stringify(['Tom', 'Nexus']) });
+  insertChunk(db, { content: 'B', entities: JSON.stringify(['Tom', 'Nexus']) });
+  insertChunk(db, { content: 'C', entities: JSON.stringify(['Tom', 'Jira']) });
   buildEntityIndex(db);
 
-  const matched = new Set(['jason']);
+  const matched = new Set(['tom']);
   const expanded = expandEntitiesWithCooccurrence(db, matched, { coThreshold: 2 });
-  assert(expanded.has('jason'), 'Original entity should remain');
-  assert(expanded.has('avalon'), 'Avalon should be added (co-occurrence count = 2, meets threshold)');
-  assert(!expanded.has('usda'), 'USDA should NOT be added (co-occurrence count = 1, below threshold)');
+  assert(expanded.has('tom'), 'Original entity should remain');
+  assert(expanded.has('nexus'), 'Nexus should be added (co-occurrence count = 2, meets threshold)');
+  assert(!expanded.has('jira'), 'Jira should NOT be added (co-occurrence count = 1, below threshold)');
   db.close();
 }
 
@@ -138,20 +138,20 @@ console.log('Test 6: Query nonexistent entity returns null');
 console.log('Test 7: CIL uses entity co-occurrence to expand results');
 {
   const db = createDb();
-  // Jason and Avalon always co-occur
-  insertChunk(db, { content: 'Send Jason fund flow doc with pool health plan for Avalon incentive APRs.', heading: 'Action Items', entities: JSON.stringify(['Jason', 'Avalon']), chunkType: 'fact', confidence: 1.0, createdAt: daysAgo(3), filePath: 'memory/2026-02-24.md' });
-  insertChunk(db, { content: 'Jason confirmed Avalon liquidity timeline and incentive structure.', heading: 'Meetings', entities: JSON.stringify(['Jason', 'Avalon']), chunkType: 'fact', confidence: 1.0, createdAt: daysAgo(1), filePath: 'memory/2026-02-26.md' });
-  // Avalon-only chunk (no Jason mention in text, but entity tag)
-  insertChunk(db, { content: 'Avalon pool health monitoring dashboard needs real-time alerts for utilization spikes.', heading: 'DeFi Ops', entities: JSON.stringify(['Avalon']), chunkType: 'decision', confidence: 0.95, createdAt: daysAgo(2), filePath: 'memory/2026-02-25.md' });
+  // Tom and Nexus always co-occur
+  insertChunk(db, { content: 'Send Tom project roadmap with API health plan for Nexus rate limits.', heading: 'Action Items', entities: JSON.stringify(['Tom', 'Nexus']), chunkType: 'fact', confidence: 1.0, createdAt: daysAgo(3), filePath: 'memory/2026-02-24.md' });
+  insertChunk(db, { content: 'Tom confirmed Nexus deployment timeline and scaling plan.', heading: 'Meetings', entities: JSON.stringify(['Tom', 'Nexus']), chunkType: 'fact', confidence: 1.0, createdAt: daysAgo(1), filePath: 'memory/2026-02-26.md' });
+  // Nexus-only chunk (no Tom mention in text, but entity tag)
+  insertChunk(db, { content: 'Nexus API health monitoring dashboard needs real-time alerts for latency spikes.', heading: 'Backend Ops', entities: JSON.stringify(['Nexus']), chunkType: 'decision', confidence: 0.95, createdAt: daysAgo(2), filePath: 'memory/2026-02-25.md' });
 
   // Build entity index first
   buildEntityIndex(db);
 
-  // Query about Jason — should pull in Avalon chunks via co-occurrence
-  const result = getRelevantContext(db, 'What does Jason need from us?');
+  // Query about Tom — should pull in Nexus chunks via co-occurrence
+  const result = getRelevantContext(db, 'What does Tom need from us?');
   assert(result.chunks.length >= 2, `Expected at least 2 chunks, got ${result.chunks.length}`);
-  const hasAvalon = result.chunks.some(c => c.content.includes('Avalon'));
-  assert(hasAvalon, 'Expected Avalon-related chunk via Jason co-occurrence');
+  const hasNexus = result.chunks.some(c => c.content.includes('Nexus'));
+  assert(hasNexus, 'Expected Nexus-related chunk via Tom co-occurrence');
   db.close();
 }
 
@@ -160,7 +160,7 @@ console.log('Test 8: Dry run reports counts without writing');
 {
   const db = createDb();
   insertChunk(db, { content: 'A', entities: JSON.stringify(['Alex']) });
-  insertChunk(db, { content: 'B', entities: JSON.stringify(['Jason']) });
+  insertChunk(db, { content: 'B', entities: JSON.stringify(['Tom']) });
 
   const result = buildEntityIndex(db, { dryRun: true });
   assert(result.entities === 2, `Expected 2 entities, got ${result.entities}`);

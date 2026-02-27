@@ -80,11 +80,11 @@ console.log('Test 5: remember() + query() roundtrip');
 {
   const ws = tmpWorkspace();
   const engine = create({ workspace: ws });
-  engine.remember('Bromantane 50mg sublingual morning protocol', { tag: 'confirmed', date: '2026-02-20' });
-  const results = engine.query('bromantane');
+  engine.remember('Creatine 5g daily morning protocol', { tag: 'confirmed', date: '2026-02-20' });
+  const results = engine.query('creatine');
   assert(Array.isArray(results), 'Expected array of results');
   assert(results.length > 0, `Expected results, got ${results.length}`);
-  assert(results[0].content.includes('Bromantane'), 'Expected content to include Bromantane');
+  assert(results[0].content.includes('Creatine'), 'Expected content to include Creatine');
   assert(typeof results[0].finalScore === 'number', 'Expected finalScore');
   assert(typeof results[0].filePath === 'string', 'Expected filePath string');
   engine.close();

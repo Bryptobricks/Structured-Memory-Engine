@@ -115,16 +115,16 @@ console.log('Test 6: Roundtrip — remember → index → recall');
   const ws = tmpWorkspace();
   const db = createDb(ws);
 
-  remember(ws, 'Bromantane 50mg sublingual morning protocol', { tag: 'confirmed', date: '2026-02-20' });
-  remember(ws, 'Switched to magnesium threonate from glycinate', { tag: 'decision', date: '2026-02-20' });
+  remember(ws, 'Creatine 5g daily morning protocol', { tag: 'confirmed', date: '2026-02-20' });
+  remember(ws, 'Switched to PostgreSQL from MySQL for the main database', { tag: 'decision', date: '2026-02-20' });
 
   indexWorkspace(db, ws, { force: true });
   const stats = db.prepare('SELECT COUNT(*) as n FROM chunks').get();
   assert(stats.n > 0, `Expected chunks after index, got ${stats.n}`);
 
-  const results = recall(db, 'bromantane', { workspace: ws });
-  assert(results.length > 0, `Expected recall results for bromantane, got ${results.length}`);
-  assert(results.some(r => r.content.includes('Bromantane 50mg')), 'Expected to find bromantane fact');
+  const results = recall(db, 'creatine', { workspace: ws });
+  assert(results.length > 0, `Expected recall results for creatine, got ${results.length}`);
+  assert(results.some(r => r.content.includes('Creatine 5g')), 'Expected to find creatine fact');
 
   db.close();
   fs.rmSync(ws, { recursive: true });

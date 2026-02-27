@@ -58,9 +58,9 @@ console.log('Test 1: extractEntities');
   const noEntities = extractEntities('Just a plain sentence with no special formatting');
   assert(noEntities.length === 0, `No false positives, got ${noEntities.length}`);
 
-  const mixed = extractEntities('@jb uses **bromantane** sublingual');
-  assert(mixed.includes('@jb'), 'Mixed: should find @jb');
-  assert(mixed.includes('bromantane'), 'Mixed: should find bromantane');
+  const mixed = extractEntities('@alex uses **creatine** daily');
+  assert(mixed.includes('@alex'), 'Mixed: should find @alex');
+  assert(mixed.includes('creatine'), 'Mixed: should find creatine');
   assert(mixed.length === 2, `Mixed: exactly 2 entities, got ${mixed.length}`);
 }
 

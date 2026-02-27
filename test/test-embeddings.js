@@ -132,25 +132,25 @@ console.log('Test 8: queryEmbedding boosts semantically similar chunks in CIL');
   const queryVec = new Float32Array([1.0, 0.0, 0.0]);
 
   insertChunk(db, {
-    content: 'MovePosition lending protocol on Movement chain for DeFi operations',
+    content: 'DataSync API gateway on CloudStack platform for backend operations',
     chunkType: 'fact', confidence: 0.7, createdAt: daysAgo(5),
     embedding: Buffer.from(vecSimilar.buffer),
   });
   insertChunk(db, {
-    content: 'Lending protocol rates are competitive with other DeFi protocols',
+    content: 'API gateway rates are competitive with other cloud platforms',
     chunkType: 'fact', confidence: 1.0, createdAt: daysAgo(1),
     embedding: Buffer.from(vecDissimilar.buffer),
   });
 
   // Without queryEmbedding — chunk 2 ranks higher (newer, higher confidence)
-  const without = getRelevantContext(db, 'lending protocol');
+  const without = getRelevantContext(db, 'API gateway');
   // With queryEmbedding — chunk 1 should get semantic boost
-  const withEmb = getRelevantContext(db, 'lending protocol', { queryEmbedding: queryVec });
+  const withEmb = getRelevantContext(db, 'API gateway', { queryEmbedding: queryVec });
 
   assert(withEmb.chunks.length >= 2, `Expected at least 2 chunks, got ${withEmb.chunks.length}`);
   // The semantically similar chunk should rank higher with embedding
-  const withEmbFirst = withEmb.chunks[0].content.includes('MovePosition');
-  const withoutFirst = without.chunks[0].content.includes('MovePosition');
+  const withEmbFirst = withEmb.chunks[0].content.includes('DataSync');
+  const withoutFirst = without.chunks[0].content.includes('DataSync');
   // At minimum, embedding should influence ranking (may or may not flip #1 depending on other signals)
   assert(withEmb.chunks.length > 0, 'queryEmbedding should not break retrieval');
   db.close();
@@ -163,14 +163,14 @@ console.log('Test 9: No queryEmbedding — semantic weight is 0, uses FTS-heavy 
   ensureEmbeddingColumn(db);
 
   insertChunk(db, {
-    content: 'Bromantane sublingual 25mg morning protocol for focus',
+    content: 'Creatine 5g daily morning protocol for recovery',
     chunkType: 'fact', confidence: 1.0, createdAt: daysAgo(2),
     embedding: makeVec([1, 0, 0]),
   });
 
-  const result = getRelevantContext(db, 'bromantane focus protocol');
+  const result = getRelevantContext(db, 'creatine daily protocol');
   assert(result.chunks.length === 1, `Expected 1 chunk, got ${result.chunks.length}`);
-  assert(result.chunks[0].content.includes('Bromantane'), 'Should find the chunk via FTS');
+  assert(result.chunks[0].content.includes('Creatine'), 'Should find the chunk via FTS');
   db.close();
 }
 

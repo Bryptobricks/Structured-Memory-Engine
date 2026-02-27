@@ -7,7 +7,7 @@ Persistent, self-maintaining memory that runs locally. No API calls, no cloud, n
 ```js
 const engine = require('structured-memory-engine').create({ workspace: '.' });
 engine.index();
-engine.context('What did Jason say about the fund flow plan?');
+engine.context('What did Sarah say about the migration plan?');
 // → Returns ranked, cited, confidence-scored context from 60+ meeting transcripts
 ```
 
@@ -21,7 +21,7 @@ AI agents have amnesia. Every session starts from zero. Your agent doesn't remem
 |-----------|-------------|-----------------|
 | **Auto-Recall** | Injects relevant memories into every agent turn automatically | **Zero manual searching** — agent just *knows* things without being asked |
 | **Confidence Scoring** | Tags facts as confirmed, inferred, or outdated with decay over time | **No more stale info served confidently** — outdated facts are deprioritized 6x vs confirmed |
-| **Entity Graph** | Tracks relationships between people, projects, and topics | **Ask about "Jason" → also get "Avalon" context** — 40-60% more relevant results on entity-heavy queries |
+| **Entity Graph** | Tracks relationships between people, projects, and topics | **Ask about "Sarah" → also get "Nexus" context** — 40-60% more relevant results on entity-heavy queries |
 | **6-Signal Ranking** | Scores results by keyword match + recency + confidence + type + file weight + entity overlap | **Top result is the right result** — not just the one with the most keyword hits |
 | **Contradiction Detection** | Flags when your memory contains conflicting facts | **Catch when old info contradicts new decisions** before acting on bad data |
 | **Memory Lifecycle** | Automatic decay, reinforcement, staleness detection, and pruning | **Self-cleaning index** — frequently-used memories get stronger, stale ones fade. Zero maintenance. |
@@ -34,24 +34,24 @@ AI agents have amnesia. Every session starts from zero. Your agent doesn't remem
 
 **Without SME:**
 ```
-User: "What did we decide about the lending protocol?"
+User: "What did we decide about the database migration?"
 Agent: "I don't have context on that. Could you remind me?"
 ```
 
 **With SME (auto-recall):**
 ```
-User: "What did we decide about the lending protocol?"
+User: "What did we decide about the database migration?"
 
 ## Recalled Context (auto-injected, 3 chunks, 847 tokens)
-- [decision] Going with Aave V3 on Base for lending. Jason confirmed parameters.
+- [decision] Going with PostgreSQL on AWS for the main database. Sarah confirmed parameters.
   Source: memory/2026-02-20.md:45 | confidence: 1.0
-- [fact] Target health factor 1.5, liquidation threshold monitoring via on-chain alerts
+- [fact] Target connection pool size 50, failover monitoring via CloudWatch alerts
   Source: memory/2026-02-21.md:23 | confidence: 0.95
-- [action_item] Jason to send final fund flow doc by Friday
-  Source: ingest/avalon-call-feb19.md:112 | confidence: 0.85
+- [action_item] Sarah to send final migration runbook by Friday
+  Source: ingest/nexus-standup-feb19.md:112 | confidence: 0.85
 
-Agent: "We decided on Aave V3 on Base. Jason confirmed the parameters — health factor 1.5 with
-        on-chain liquidation monitoring. He owes us the final fund flow doc by Friday."
+Agent: "We decided on PostgreSQL on AWS. Sarah confirmed the parameters — pool size 50 with
+        CloudWatch failover monitoring. She owes us the final migration runbook by Friday."
 ```
 
 **The difference:** The agent answered with specifics, citations, and confidence levels — without being asked to search. That context was auto-injected before the agent even started thinking.
@@ -61,7 +61,7 @@ Agent: "We decided on Aave V3 on Base. Jason confirmed the parameters — health
 Every time your agent receives a message, SME runs a 6-step pipeline in <50ms:
 
 1. **Extract** — Key terms and entity names from the user's message + recent conversation
-2. **Expand** — Entity graph adds related entities (mention "Jason" → also match "Avalon")
+2. **Expand** — Entity graph adds related entities (mention "Sarah" → also match "Nexus")
 3. **Query** — Dual FTS5 search: AND query for precision, OR query with alias expansion for recall
 4. **Rank** — 6-signal scoring: keyword relevance + semantic similarity + recency + type priority + file weight + entity overlap, multiplied by confidence^1.5
 5. **Budget** — Top chunks selected within a token limit (default 1,500), cleanly truncated
@@ -142,9 +142,9 @@ Auto-recall and auto-capture are enabled by default. Your agent gets persistent 
 ```js
 const engine = require('structured-memory-engine').create({ workspace: '.' });
 
-engine.query('aave health factor', { limit: 5, type: 'confirmed' });
-engine.remember('decided to skip bromantane today', { tag: 'decision' });
-engine.context('What did Jason say?', { maxTokens: 2000 });
+engine.query('database connection pooling', { limit: 5, type: 'confirmed' });
+engine.remember('decided to use Redis for caching', { tag: 'decision' });
+engine.context('What did Sarah say?', { maxTokens: 2000 });
 engine.reflect({ dryRun: true });
 engine.ingest('/path/to/meeting-transcript.txt');
 engine.close();
@@ -158,7 +158,7 @@ Every command supports `--json` for machine-parseable output. Pipe into `jq`, ca
 node lib/index.js query "deployment timeline" --json --limit 5
 node lib/index.js reflect --dry-run
 node lib/index.js ingest /path/to/meetings/ --force
-node lib/index.js entities Jason
+node lib/index.js entities Sarah
 ```
 
 ## Features Deep Dive
@@ -168,12 +168,12 @@ node lib/index.js entities Jason
 Tag lines in your markdown for structured extraction:
 
 ```markdown
-[fact] Takes bromantane 25mg sublingual daily
+[fact] Team standup is at 9am Pacific daily
 [decision] FTS5 over vector DB for search
-[confirmed] Height is 6'5"
-[inferred] Prefers warm lighting
+[confirmed] Default deploy target is us-east-1
+[inferred] Prefers dark mode
 [action_item] Send API spec to backend team by Friday
-[outdated?] Takes 1.75mg retatrutide (now 1.5mg)
+[outdated?] Redis cache TTL was 300s (now 600s)
 ```
 
 Untagged bullets under headings like `## Decisions`, `## Facts`, `## Preferences` are auto-classified. No tagging required to get value — it just makes results more precise.
@@ -194,14 +194,14 @@ Run it manually, on a cron, or as a Claude Code session hook. `--dry-run` to pre
 
 ### Entity Graph
 
-SME tracks entity co-occurrences across all memory. When "Jason" and "Avalon" appear in the same chunks repeatedly, they're linked — even if a query only mentions one.
+SME tracks entity co-occurrences across all memory. When "Sarah" and "Nexus" appear in the same chunks repeatedly, they're linked — even if a query only mentions one.
 
 ```bash
-node lib/index.js entities Jason
-# → Jason: 12 mentions, co-occurs with Avalon (8), fund flow (5), lending (4)
+node lib/index.js entities Sarah
+# → Sarah: 12 mentions, co-occurs with Nexus (8), migration (5), backend (4)
 ```
 
-**CIL integration:** Query "What does Jason need?" → CIL expands to also search Avalon-tagged chunks. You get related context you didn't explicitly ask for.
+**CIL integration:** Query "What does Sarah need?" → CIL expands to also search Nexus-tagged chunks. You get related context you didn't explicitly ask for.
 
 ### Transcript & CSV Ingestion
 

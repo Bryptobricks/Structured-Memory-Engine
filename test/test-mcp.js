@@ -58,15 +58,15 @@ console.log('Test 1: handleQuery formatting');
 {
   const ws = tmpWorkspace();
   const db = createDb(ws);
-  insertChunk(db, { heading: 'Health', content: 'Alex takes bromantane sublingual 50mg daily for focus', chunkType: 'confirmed', confidence: 1.0, filePath: 'memory/2026-02-20.md' });
+  insertChunk(db, { heading: 'Health', content: 'Alex takes creatine 5g daily for recovery', chunkType: 'confirmed', confidence: 1.0, filePath: 'memory/2026-02-20.md' });
   insertChunk(db, { heading: 'Stack', content: 'magnesium glycinate 400mg before bed', chunkType: 'fact', confidence: 0.9, filePath: 'MEMORY.md' });
 
-  const result = handleQuery(db, ws, { query: 'bromantane' });
+  const result = handleQuery(db, ws, { query: 'creatine' });
   assert(result.content.length === 1, `Expected 1 content block, got ${result.content.length}`);
   const text = result.content[0].text;
   assert(text.includes('memory/2026-02-20.md'), `Expected file path in output, got: ${text.slice(0, 100)}`);
   assert(text.includes('score:'), 'Expected score in output');
-  assert(text.includes('bromantane'), 'Expected content snippet');
+  assert(text.includes('creatine'), 'Expected content snippet');
   assert(text.includes('result(s)'), 'Expected result count');
   assert(!result.isError, 'Should not be error');
   db.close();
