@@ -245,6 +245,30 @@ console.log('Test 13: Empty conversation context has no effect');
   db.close();
 }
 
+// ─── Test 14: excludeFromRecall filters out specified files ───
+console.log('Test 14: excludeFromRecall filters out specified files');
+{
+  const db = createDb();
+  // Insert chunks from different files
+  insertChunk(db, { content: 'creatine protocol daily morning supplement stack', filePath: 'CLAUDE.md', confidence: 1.0 });
+  insertChunk(db, { content: 'creatine experiment started tracking today supplement', filePath: 'memory/2026-02-01.md', confidence: 1.0 });
+  insertChunk(db, { content: 'creatine dosage review agent configuration supplement', filePath: 'agents/reviewer.md', confidence: 1.0 });
+
+  // Without exclusion — should find all
+  const resultAll = getRelevantContext(db, 'creatine supplement');
+  assert(resultAll.chunks.length >= 2, `Expected at least 2 chunks without exclusion, got ${resultAll.chunks.length}`);
+
+  // With exclusion — CLAUDE.md and agents/*.md excluded
+  const resultFiltered = getRelevantContext(db, 'creatine supplement', {
+    excludeFromRecall: ['CLAUDE.md', 'agents/*.md'],
+  });
+  const hasExcluded = resultFiltered.chunks.some(c => c.filePath === 'CLAUDE.md' || c.filePath === 'agents/reviewer.md');
+  assert(!hasExcluded, 'Should not contain excluded files in results');
+  const hasMemory = resultFiltered.chunks.some(c => c.filePath === 'memory/2026-02-01.md');
+  assert(hasMemory, 'Should still contain non-excluded memory file');
+  db.close();
+}
+
 // ─── Summary ───
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

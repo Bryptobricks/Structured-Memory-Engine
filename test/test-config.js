@@ -2,7 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { loadConfig, resolveIncludes, resolveFileType, DEFAULTS } = require('../lib/config');
+const { loadConfig, resolveIncludes, resolveFileType, isExcludedFromRecall, DEFAULTS } = require('../lib/config');
 
 let passed = 0, failed = 0;
 
@@ -234,6 +234,69 @@ console.log('Test 18: resolveFileType — handles null/undefined gracefully');
   assert(resolveFileType('MEMORY.md', null) === null, 'null defaults should return null');
   assert(resolveFileType('MEMORY.md', undefined) === null, 'undefined defaults should return null');
   assert(resolveFileType('MEMORY.md', {}) === null, 'empty defaults should return null');
+}
+
+// --- Test 19: isExcludedFromRecall — exact basename match ---
+console.log('Test 19: isExcludedFromRecall — exact basename match');
+{
+  assert(isExcludedFromRecall('CLAUDE.md', ['CLAUDE.md']) === true, 'Should match exact basename');
+  assert(isExcludedFromRecall('CLAUDE.md', ['OTHER.md']) === false, 'Should not match different basename');
+}
+
+// --- Test 20: isExcludedFromRecall — exact path match ---
+console.log('Test 20: isExcludedFromRecall — exact path match');
+{
+  assert(isExcludedFromRecall('agents/reviewer.md', ['agents/reviewer.md']) === true, 'Should match exact path');
+  assert(isExcludedFromRecall('agents/reviewer.md', ['reviewer.md']) === true, 'Should match basename of path');
+}
+
+// --- Test 21: isExcludedFromRecall — glob patterns ---
+console.log('Test 21: isExcludedFromRecall — glob patterns');
+{
+  assert(isExcludedFromRecall('agents/reviewer.md', ['agents/*.md']) === true, 'Should match glob');
+  assert(isExcludedFromRecall('memory/2026-02-27.md', ['agents/*.md']) === false, 'Should not match unrelated glob');
+  assert(isExcludedFromRecall('skills/commit.md', ['skills/*.md']) === true, 'Should match skills glob');
+}
+
+// --- Test 22: isExcludedFromRecall — empty/null patterns ---
+console.log('Test 22: isExcludedFromRecall — empty/null patterns');
+{
+  assert(isExcludedFromRecall('CLAUDE.md', []) === false, 'Empty array should not exclude');
+  assert(isExcludedFromRecall('CLAUDE.md', null) === false, 'Null should not exclude');
+  assert(isExcludedFromRecall(null, ['CLAUDE.md']) === false, 'Null filePath should not match');
+}
+
+// --- Test 23: isExcludedFromRecall — multiple patterns ---
+console.log('Test 23: isExcludedFromRecall — multiple patterns');
+{
+  const patterns = ['CLAUDE.md', 'agents/*.md', 'SOUL.md'];
+  assert(isExcludedFromRecall('CLAUDE.md', patterns) === true, 'Should match first pattern');
+  assert(isExcludedFromRecall('agents/reviewer.md', patterns) === true, 'Should match glob pattern');
+  assert(isExcludedFromRecall('SOUL.md', patterns) === true, 'Should match last pattern');
+  assert(isExcludedFromRecall('memory/2026-02-01.md', patterns) === false, 'Should not match any pattern');
+}
+
+// --- Test 24: loadConfig includes excludeFromRecall default ---
+console.log('Test 24: loadConfig includes excludeFromRecall default');
+{
+  const ws = tmpWorkspace();
+  const config = loadConfig(ws);
+  assert(Array.isArray(config.excludeFromRecall), 'Should have excludeFromRecall array');
+  assert(config.excludeFromRecall.length === 0, 'Default should be empty');
+  fs.rmSync(ws, { recursive: true });
+}
+
+// --- Test 25: loadConfig preserves user excludeFromRecall ---
+console.log('Test 25: loadConfig preserves user excludeFromRecall');
+{
+  const ws = tmpWorkspace();
+  fs.writeFileSync(path.join(ws, '.memory', 'config.json'), JSON.stringify({
+    excludeFromRecall: ['CLAUDE.md', 'agents/*.md'],
+  }));
+  const config = loadConfig(ws);
+  assert(config.excludeFromRecall.length === 2, `Expected 2 patterns, got ${config.excludeFromRecall.length}`);
+  assert(config.excludeFromRecall[0] === 'CLAUDE.md', 'First pattern should be CLAUDE.md');
+  fs.rmSync(ws, { recursive: true });
 }
 
 // --- Summary ---
