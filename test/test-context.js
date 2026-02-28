@@ -269,6 +269,29 @@ console.log('Test 14: excludeFromRecall filters out specified files');
   db.close();
 }
 
+// ─── Test 15: Stop-word-heavy query still finds content words ───
+console.log('Test 15: Stop-word-heavy query still finds content words');
+{
+  const db = createDb();
+  seedFixture(db);
+  // "where am I at with my creatine?" → stop words stripped, "creatine" survives
+  const result = getRelevantContext(db, 'where am I at with my creatine?');
+  assert(result.chunks.length > 0, `Expected chunks from stop-word-heavy query, got ${result.chunks.length}`);
+  assert(result.chunks[0].content.includes('Creatine'), `Expected Creatine chunk, got: ${result.chunks[0].content.slice(0, 60)}`);
+  db.close();
+}
+
+// ─── Test 16: Pure stop word query returns empty ───
+console.log('Test 16: Pure stop word query returns empty');
+{
+  const db = createDb();
+  seedFixture(db);
+  const result = getRelevantContext(db, 'how is it going today');
+  assert(result.chunks.length === 0, `Expected 0 chunks for pure stop words, got ${result.chunks.length}`);
+  assert(result.text === '', 'Expected empty text for pure stop words');
+  db.close();
+}
+
 // ─── Summary ───
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

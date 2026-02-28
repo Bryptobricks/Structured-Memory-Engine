@@ -202,6 +202,53 @@ console.log('Test 5: recall integration');
   db.close();
 }
 
+// ─── Test 6: Stop word filtering in sanitizeFtsQuery ───
+console.log('Test 6: Stop word filtering in sanitizeFtsQuery');
+{
+  // Pure stop words → null
+  const pure = sanitizeFtsQuery('where am I at with my');
+  assert(pure === null, `Pure stop words should return null, got: ${pure}`);
+
+  // Mixed: stop words stripped, content words kept
+  const mixed = sanitizeFtsQuery('where is my bromantane?');
+  assert(mixed !== null, 'Mixed query should not be null');
+  assert(mixed.includes('"bromantane"'), `Should contain bromantane, got: ${mixed}`);
+  assert(!mixed.includes('"where"'), 'Should not contain "where"');
+  assert(!mixed.includes('"my"'), 'Should not contain "my"');
+
+  // Punctuation stripped
+  const punct = sanitizeFtsQuery("what's JB's portfolio?");
+  assert(punct !== null, 'Punctuation query should not be null');
+  assert(punct.includes('"JB"'), `Should have JB after possessive strip, got: ${punct}`);
+  assert(punct.includes('"portfolio"'), `Should have portfolio, got: ${punct}`);
+
+  // "how is it going" → all stop words → null
+  const allStop = sanitizeFtsQuery('how is it going');
+  assert(allStop === null, `All stop words should return null, got: ${allStop}`);
+
+  // "how is my ETH doing" → just ETH
+  const eth = sanitizeFtsQuery('how is my ETH doing');
+  assert(eth !== null, 'ETH query should not be null');
+  assert(eth.includes('"ETH"'), `Should contain ETH, got: ${eth}`);
+}
+
+// ─── Test 7: Stop word filtering in buildOrQuery ───
+console.log('Test 7: Stop word filtering in buildOrQuery');
+{
+  const aliases = { crypto: ['defi', 'token'] };
+
+  // Pure stop words → null
+  const pure = buildOrQuery('how is it going', aliases);
+  assert(pure === null, `Pure stop words should return null, got: ${pure}`);
+
+  // Mixed: keeps content, expands aliases
+  const mixed = buildOrQuery('where is my crypto', aliases);
+  assert(mixed !== null, 'Mixed query should not be null');
+  assert(mixed.includes('"crypto"'), 'Should contain crypto');
+  assert(mixed.includes('"defi"'), 'Should expand crypto alias');
+  assert(!mixed.includes('"where"'), 'Should not contain stop word "where"');
+}
+
 // ─── Summary ───
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
