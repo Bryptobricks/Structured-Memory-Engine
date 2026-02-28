@@ -118,6 +118,57 @@ console.log('Test 10: Whitespace collapse');
   assert(result.includes('creatine'), 'Should preserve content');
 }
 
+// ─── Test 11: Metadata label with parenthetical qualifier ───
+console.log('Test 11: Metadata label with parenthetical qualifier');
+{
+  const input = 'Conversation info (untrusted metadata):\n\nWhat is my portfolio?';
+  const result = stripQuery(input);
+  assert(!result.includes('Conversation info'), 'Should remove metadata label line');
+  assert(!result.includes('untrusted'), 'Should remove parenthetical qualifier');
+  assert(result.includes('portfolio'), 'Should preserve query');
+}
+
+// ─── Test 12: Metadata label + fenced block combo ───
+console.log('Test 12: Metadata label + fenced block combo');
+{
+  const input = 'Conversation info (untrusted metadata):\n```json\n{"timestamp": "now"}\n```\n\nHow am I investing?';
+  const result = stripQuery(input);
+  assert(!result.includes('Conversation'), 'Should remove label line');
+  assert(!result.includes('timestamp'), 'Should remove code block');
+  assert(result.includes('investing'), 'Should preserve query');
+}
+
+// ─── Test 13: System timestamp + metadata label + fenced block ───
+console.log('Test 13: Full envelope — system + label + code block');
+{
+  const input = 'System: [2026-02-28 10:30:04 PST] Cron: HEARTBEAT_OK\n\nConversation info (untrusted metadata):\n```json\n{"ts": "now"}\n```\n\nWhat did I learn?';
+  const result = stripQuery(input);
+  assert(!result.includes('HEARTBEAT'), 'Should remove System: line');
+  assert(!result.includes('Conversation'), 'Should remove metadata label');
+  assert(!result.includes('ts'), 'Should remove code block');
+  assert(result.includes('learn'), 'Should preserve query');
+}
+
+// ─── Test 14: Recalled Context section stripped ───
+console.log('Test 14: Recalled Context section stripped');
+{
+  const input = '## Recalled Context\nStructured memories retrieved by relevance.\n\n- creatine 5g daily\n  ↳ memory/2026-02-20.md:1 [fact]\n- magnesium 400mg\n  ↳ memory/2026-02-20.md:3 [fact]\n\nWhat else should I take?';
+  const result = stripQuery(input);
+  assert(!result.includes('Recalled Context'), 'Should remove section header');
+  assert(!result.includes('creatine'), 'Should remove recalled chunk content');
+  assert(!result.includes('magnesium'), 'Should remove recalled chunk content');
+  assert(result.includes('should I take'), 'Should preserve query');
+}
+
+// ─── Test 15: Other parenthetical labels pass through ───
+console.log('Test 15: Non-metadata parenthetical labels pass through');
+{
+  const input = 'Tom (project lead): mentioned the deadline\nWhat about the timeline?';
+  const result = stripQuery(input);
+  assert(result.includes('Tom'), 'Non-metadata parenthetical should survive');
+  assert(result.includes('timeline'), 'Query should survive');
+}
+
 // ─── Summary ───
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

@@ -320,13 +320,13 @@ console.log('Test 21: Named month — in january');
   assert(!r.strippedQuery.includes('january'), 'in january should be stripped');
 }
 
-// ─── Test 22: Named month future → previous year ───
-console.log('Test 22: Named month future resolves to previous year');
+// ─── Test 22: Named month — always current year ───
+console.log('Test 22: Named month — always current year');
 {
-  // NOW = Feb 2026. March hasn't happened yet → use 2025.
+  // NOW = Feb 2026. "in march" → March 2026 (current year, even though future).
   const r = resolveTemporalQuery('what did we do in march?', NOW);
-  assert(r.since.includes('2025-03-01'), `Expected since=2025-03-01, got ${r.since}`);
-  assert(r.until.includes('2025-04-01'), `Expected until=2025-04-01, got ${r.until}`);
+  assert(r.since.includes('2026-03-01'), `Expected since=2026-03-01, got ${r.since}`);
+  assert(r.until.includes('2026-04-01'), `Expected until=2026-04-01, got ${r.until}`);
 }
 
 // ─── Test 23: Next month ───
@@ -366,6 +366,47 @@ console.log('Test 26: Bare day name — friday');
   assert(r.since.includes('2026-02-27'), `Expected since=2026-02-27, got ${r.since}`);
   assert(r.until.includes('2026-02-28'), `Expected until=2026-02-28, got ${r.until}`);
   assert(r.dateTerms.includes('2026-02-27'), 'Expected 2026-02-27 in dateTerms');
+}
+
+// ─── Test 27: Compound — "wednesday of last week" ───
+console.log('Test 27: Compound — wednesday of last week');
+{
+  // NOW = Feb 28 (Saturday). Last week = Feb 15-21. Wednesday of last week = Feb 18.
+  const r = resolveTemporalQuery('What did I accomplish on Wednesday of last week?', NOW);
+  assert(r.since.includes('2026-02-18'), `Expected since=2026-02-18, got ${r.since}`);
+  assert(r.until.includes('2026-02-19'), `Expected until=2026-02-19, got ${r.until}`);
+  assert(r.dateTerms.includes('2026-02-18'), 'Expected 2026-02-18 in dateTerms');
+  assert(!r.strippedQuery.includes('Wednesday'), 'wednesday should be stripped');
+  assert(!r.strippedQuery.includes('last week'), 'last week should be stripped');
+}
+
+// ─── Test 28: Compound — "last week's friday" ───
+console.log('Test 28: Compound — last week\'s friday');
+{
+  // NOW = Feb 28 (Saturday). Last week = Feb 15-21. Friday of last week = Feb 20.
+  const r = resolveTemporalQuery("What happened last week's friday?", NOW);
+  assert(r.since.includes('2026-02-20'), `Expected since=2026-02-20, got ${r.since}`);
+  assert(r.until.includes('2026-02-21'), `Expected until=2026-02-21, got ${r.until}`);
+  assert(r.dateTerms.includes('2026-02-20'), 'Expected 2026-02-20 in dateTerms');
+}
+
+// ─── Test 29: Compound — "wednesday of this last week" ───
+console.log('Test 29: Compound — wednesday of this last week');
+{
+  // "this last week" variant should resolve same as "last week"
+  const r = resolveTemporalQuery('What did I do Wednesday of this last week?', NOW);
+  assert(r.since.includes('2026-02-18'), `Expected since=2026-02-18, got ${r.since}`);
+  assert(r.dateTerms.includes('2026-02-18'), 'Expected 2026-02-18 in dateTerms');
+}
+
+// ─── Test 30: Bare "last week" unaffected by compound pattern ───
+console.log('Test 30: Bare last week still works as range');
+{
+  const r = resolveTemporalQuery('what did we do last week?', NOW);
+  assert(r.since !== null, 'last week should set since');
+  assert(r.until !== null, 'last week should set until');
+  assert(r.recencyBoost === 14, `Expected recencyBoost=14, got ${r.recencyBoost}`);
+  assert(r.dateTerms.length === 0, 'Bare last week should have no dateTerms');
 }
 
 // ─── Summary ───
