@@ -287,6 +287,87 @@ console.log('Test 18: Temporal + content query combination');
   assert(!r.strippedQuery.includes('this week'), 'Temporal phrase should be stripped');
 }
 
+// ─── Test 19: Day-of-week — "on wednesday" ───
+console.log('Test 19: Day-of-week — on wednesday');
+{
+  // NOW = Feb 28 2026 (Saturday). Most recent Wednesday = Feb 25.
+  const r = resolveTemporalQuery('what happened on wednesday?', NOW);
+  assert(r.since.includes('2026-02-25'), `Expected since=2026-02-25, got ${r.since}`);
+  assert(r.until.includes('2026-02-26'), `Expected until=2026-02-26, got ${r.until}`);
+  assert(r.dateTerms.includes('2026-02-25'), 'Expected 2026-02-25 in dateTerms');
+  assert(!r.strippedQuery.includes('wednesday'), 'wednesday should be stripped');
+}
+
+// ─── Test 20: Last day-of-week — "last monday" ───
+console.log('Test 20: Last day-of-week — last monday');
+{
+  // NOW = Feb 28 (Saturday). Most recent Monday = Feb 23 (5 days back).
+  const r = resolveTemporalQuery('what did I do last monday?', NOW);
+  assert(r.since.includes('2026-02-23'), `Expected since=2026-02-23, got ${r.since}`);
+  assert(r.until.includes('2026-02-24'), `Expected until=2026-02-24, got ${r.until}`);
+  assert(r.dateTerms.includes('2026-02-23'), 'Expected 2026-02-23 in dateTerms');
+  assert(!r.strippedQuery.includes('last monday'), 'last monday should be stripped');
+}
+
+// ─── Test 21: Named month — "in january" ───
+console.log('Test 21: Named month — in january');
+{
+  // NOW = Feb 2026. January is past → use 2026.
+  const r = resolveTemporalQuery('what happened in january?', NOW);
+  assert(r.since.includes('2026-01-01'), `Expected since=2026-01-01, got ${r.since}`);
+  assert(r.until.includes('2026-02-01'), `Expected until=2026-02-01, got ${r.until}`);
+  assert(r.recencyBoost === 30, `Expected recencyBoost=30, got ${r.recencyBoost}`);
+  assert(!r.strippedQuery.includes('january'), 'in january should be stripped');
+}
+
+// ─── Test 22: Named month future → previous year ───
+console.log('Test 22: Named month future resolves to previous year');
+{
+  // NOW = Feb 2026. March hasn't happened yet → use 2025.
+  const r = resolveTemporalQuery('what did we do in march?', NOW);
+  assert(r.since.includes('2025-03-01'), `Expected since=2025-03-01, got ${r.since}`);
+  assert(r.until.includes('2025-04-01'), `Expected until=2025-04-01, got ${r.until}`);
+}
+
+// ─── Test 23: Next month ───
+console.log('Test 23: Next month');
+{
+  // NOW = Feb 2026 → next month = March 2026.
+  const r = resolveTemporalQuery('what is planned for next month?', NOW);
+  assert(r.since.includes('2026-03-01'), `Expected since=2026-03-01, got ${r.since}`);
+  assert(r.until.includes('2026-04-01'), `Expected until=2026-04-01, got ${r.until}`);
+  assert(r.recencyBoost === 30, `Expected recencyBoost=30, got ${r.recencyBoost}`);
+  assert(!r.strippedQuery.includes('next month'), 'next month should be stripped');
+}
+
+// ─── Test 24: Last few days ───
+console.log('Test 24: Last few days');
+{
+  // NOW = Feb 28 → 3 days ago = Feb 25.
+  const r = resolveTemporalQuery('what happened in the last few days?', NOW);
+  assert(r.since.includes('2026-02-25'), `Expected since=2026-02-25, got ${r.since}`);
+  assert(r.recencyBoost === 7, `Expected recencyBoost=7, got ${r.recencyBoost}`);
+  assert(!r.strippedQuery.includes('last few days'), 'last few days should be stripped');
+}
+
+// ─── Test 25: Day-of-week stripping preserves content ───
+console.log('Test 25: Day-of-week stripping preserves content');
+{
+  const r = resolveTemporalQuery('meeting notes from last monday', NOW);
+  assert(!r.strippedQuery.includes('monday'), 'monday should be stripped');
+  assert(r.strippedQuery.includes('meeting notes'), 'content words should survive');
+}
+
+// ─── Test 26: Bare day name ───
+console.log('Test 26: Bare day name — friday');
+{
+  // NOW = Feb 28 (Saturday). Most recent Friday = Feb 27 (1 day back).
+  const r = resolveTemporalQuery('what happened friday?', NOW);
+  assert(r.since.includes('2026-02-27'), `Expected since=2026-02-27, got ${r.since}`);
+  assert(r.until.includes('2026-02-28'), `Expected until=2026-02-28, got ${r.until}`);
+  assert(r.dateTerms.includes('2026-02-27'), 'Expected 2026-02-27 in dateTerms');
+}
+
 // ─── Summary ───
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
