@@ -53,6 +53,8 @@ function insertChunk(db, { heading = null, content = 'test content', chunkType =
   db.prepare('INSERT OR REPLACE INTO files (file_path, mtime_ms, chunk_count, indexed_at) VALUES (?, ?, 1, ?)').run(filePath, Date.now(), now);
 }
 
+async function main() {
+
 // ─── Test 1: handleQuery formatting ───
 console.log('Test 1: handleQuery formatting');
 {
@@ -111,7 +113,7 @@ console.log('Test 4: handleReflect formatting');
   insertChunk(db, { content: 'old fact about something', chunkType: 'inferred', confidence: 0.5, createdAt: new Date(Date.now() - 200 * 86400000).toISOString() });
   insertChunk(db, { content: 'recent fact', chunkType: 'fact', confidence: 1.0 });
 
-  const result = handleReflect(db, { dryRun: true });
+  const result = await handleReflect(db, { dryRun: true });
   const text = result.content[0].text;
   assert(text.includes('[DRY RUN]'), 'Expected DRY RUN prefix');
   assert(text.includes('Decayed:'), 'Expected Decayed count');
@@ -137,6 +139,7 @@ console.log('Test 5: handleStatus formatting');
   assert(text.includes('Files indexed:'), 'Expected file count');
   assert(text.includes('Total chunks:'), 'Expected chunk count');
   assert(text.includes('MEMORY.md'), 'Expected file list');
+  assert(text.includes('Embeddings:'), 'Expected embedding status');
   db.close();
   fs.rmSync(ws, { recursive: true });
 }
@@ -164,7 +167,7 @@ console.log('Test 7: handleIndex formatting');
   fs.mkdirSync(memDir, { recursive: true });
   fs.writeFileSync(path.join(memDir, '2026-02-20.md'), '# Session Log — 2026-02-20\n\n- [fact] Test indexing\n', 'utf-8');
 
-  const result = handleIndex(db, ws, { force: true }, null);
+  const result = await handleIndex(db, ws, { force: true }, null);
   const text = result.content[0].text;
   assert(text.includes('Indexed:'), 'Expected Indexed count');
   assert(text.includes('Skipped:'), 'Expected Skipped count');
@@ -245,12 +248,12 @@ console.log('Test 10: handleIndex with config-driven extra files');
   fs.writeFileSync(path.join(memDir, '2026-02-20.md'), '# Session Log\n\n- [fact] Daily log\n', 'utf-8');
 
   // Index WITHOUT config — agents file should NOT be indexed
-  const result1 = handleIndex(db, ws, { force: true }, null);
+  const result1 = await handleIndex(db, ws, { force: true }, null);
   const stats1 = db.prepare('SELECT COUNT(*) as n FROM files').get().n;
 
   // Now index WITH config including agents glob
   const config = { ...DEFAULTS, includeGlobs: ['agents/*.md'] };
-  const result2 = handleIndex(db, ws, { force: true }, config);
+  const result2 = await handleIndex(db, ws, { force: true }, config);
   const text2 = result2.content[0].text;
 
   // Verify agents file is now indexed
@@ -272,7 +275,7 @@ console.log('Test 11: handleIndex with config explicit include');
   fs.writeFileSync(path.join(ws, 'CLAUDE.md'), '# Master Config\n\n- [confirmed] Default stack is React 19\n', 'utf-8');
 
   const config = { ...DEFAULTS, include: ['CLAUDE.md'] };
-  const result = handleIndex(db, ws, { force: true }, config);
+  const result = await handleIndex(db, ws, { force: true }, config);
 
   const claudeChunks = db.prepare("SELECT COUNT(*) as n FROM chunks WHERE file_path = 'CLAUDE.md'").get().n;
   assert(claudeChunks > 0, `Expected CLAUDE.md chunks, got ${claudeChunks}`);
@@ -292,7 +295,7 @@ console.log('Test 12: handleIndex without config still works (backward compat)')
   fs.writeFileSync(path.join(memDir, '2026-02-20.md'), '# Test\n\n- [fact] Works without config\n', 'utf-8');
 
   // null config = no extra files, should still index defaults
-  const result = handleIndex(db, ws, { force: true }, null);
+  const result = await handleIndex(db, ws, { force: true }, null);
   const text = result.content[0].text;
   assert(text.includes('Indexed: 1'), `Expected 1 indexed, got: ${text}`);
 
@@ -365,7 +368,7 @@ console.log('Test 15: handleIndex threads fileTypeDefaults to indexWorkspace');
   fs.writeFileSync(path.join(ws, 'MEMORY.md'), '# Memory\n\nImportant facts here\n', 'utf-8');
 
   const config = { ...DEFAULTS, fileTypeDefaults: { 'MEMORY.md': 'confirmed' } };
-  handleIndex(db, ws, { force: true }, config);
+  await handleIndex(db, ws, { force: true }, config);
 
   const chunks = db.prepare("SELECT chunk_type FROM chunks WHERE file_path = 'MEMORY.md'").all();
   assert(chunks.length > 0, 'Expected MEMORY.md chunks');
@@ -381,7 +384,7 @@ console.log('Test 16: handleRemember — no warning on successful index');
   const ws = tmpWorkspace();
   const db = createDb(ws);
 
-  const result = handleRemember(db, ws, { content: 'Test fact for warning check', tag: 'fact' }, null);
+  const result = await handleRemember(db, ws, { content: 'Test fact for warning check', tag: 'fact' }, null);
   const text = result.content[0].text;
   assert(!text.includes('Indexing failed'), `Expected no warning on success, got: ${text}`);
   assert(text.includes('Saved to'), 'Should confirm save');
@@ -405,7 +408,7 @@ console.log('Test 17: handleRemember — warning on index failure');
   const db2 = createDb(ws);
   db2.close(); // close it so indexSingleFile will fail
 
-  const result2 = handleRemember(db2, ws, { content: 'Another test fact', tag: 'fact' }, null);
+  const result2 = await handleRemember(db2, ws, { content: 'Another test fact', tag: 'fact' }, null);
   const text2 = result2.content[0].text;
   assert(text2.includes('Indexing failed'), `Expected warning when index fails, got: ${text2}`);
   fs.rmSync(ws, { recursive: true });
@@ -454,7 +457,7 @@ console.log('Test 20: handleIndex — cleaned count in output');
   const db = createDb(ws);
 
   fs.writeFileSync(path.join(ws, 'MEMORY.md'), '# Memory\n\nSome facts\n');
-  const result = handleIndex(db, ws, { force: true }, null);
+  const result = await handleIndex(db, ws, { force: true }, null);
   const text = result.content[0].text;
   assert(text.includes('Cleaned:'), `Expected Cleaned count in output, got: ${text}`);
 
@@ -462,6 +465,12 @@ console.log('Test 20: handleIndex — cleaned count in output');
   fs.rmSync(ws, { recursive: true });
 }
 
-// ─── Summary ───
-console.log(`\n${passed} passed, ${failed} failed`);
-process.exit(failed > 0 ? 1 : 0);
+}
+
+main().then(() => {
+  console.log(`\n${passed} passed, ${failed} failed`);
+  process.exit(failed > 0 ? 1 : 0);
+}).catch(err => {
+  console.error(err);
+  process.exit(1);
+});
