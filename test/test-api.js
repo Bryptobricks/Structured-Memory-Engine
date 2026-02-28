@@ -187,6 +187,49 @@ console.log('Test 12: Double close() does not crash');
   fs.rmSync(ws, { recursive: true });
 }
 
+// ─── Test 13: api.context() respects excludeFromRecall from config ───
+console.log('Test 13: api.context() respects excludeFromRecall from config');
+{
+  const ws = tmpWorkspace();
+  fs.mkdirSync(path.join(ws, '.memory'), { recursive: true });
+  fs.writeFileSync(path.join(ws, '.memory', 'config.json'), JSON.stringify({
+    excludeFromRecall: ['CLAUDE.md'],
+  }));
+  const engine = create({ workspace: ws });
+  // Write a memory file that will be indexed
+  fs.mkdirSync(path.join(ws, 'memory'), { recursive: true });
+  fs.writeFileSync(path.join(ws, 'memory', '2026-02-20.md'), '# Notes\n- [fact] creatine protocol daily morning supplement\n');
+  fs.writeFileSync(path.join(ws, 'CLAUDE.md'), '# System\n- creatine protocol instructions for daily supplement\n');
+  engine.index({ force: true });
+  const result = engine.context('creatine supplement');
+  const hasClaude = result.chunks.some(c => c.filePath === 'CLAUDE.md');
+  assert(!hasClaude, 'context() should exclude CLAUDE.md per config excludeFromRecall');
+  engine.close();
+  fs.rmSync(ws, { recursive: true });
+}
+
+// ─── Test 14: api.query() respects excludeFromRecall from config ───
+console.log('Test 14: api.query() respects excludeFromRecall from config');
+{
+  const ws = tmpWorkspace();
+  fs.mkdirSync(path.join(ws, '.memory'), { recursive: true });
+  fs.writeFileSync(path.join(ws, '.memory', 'config.json'), JSON.stringify({
+    excludeFromRecall: ['CLAUDE.md'],
+  }));
+  const engine = create({ workspace: ws });
+  fs.mkdirSync(path.join(ws, 'memory'), { recursive: true });
+  fs.writeFileSync(path.join(ws, 'memory', '2026-02-20.md'), '# Notes\n- [fact] creatine protocol daily morning supplement\n');
+  fs.writeFileSync(path.join(ws, 'CLAUDE.md'), '# System\n- creatine protocol instructions for daily supplement\n');
+  engine.index({ force: true });
+  const results = engine.query('creatine');
+  const hasClaude = results.some(r => r.filePath === 'CLAUDE.md');
+  assert(!hasClaude, 'query() should exclude CLAUDE.md per config excludeFromRecall');
+  const hasMemory = results.some(r => r.filePath.includes('memory/'));
+  assert(hasMemory, 'query() should still return non-excluded files');
+  engine.close();
+  fs.rmSync(ws, { recursive: true });
+}
+
 // ─── Summary ───
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
