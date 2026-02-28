@@ -2,7 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { loadConfig, resolveIncludes, resolveFileType, isExcludedFromRecall, DEFAULTS } = require('../lib/config');
+const { loadConfig, resolveIncludes, resolveFileType, resolveFileWeight, isExcludedFromRecall, DEFAULTS } = require('../lib/config');
 
 let passed = 0, failed = 0;
 
@@ -296,6 +296,60 @@ console.log('Test 25: loadConfig preserves user excludeFromRecall');
   const config = loadConfig(ws);
   assert(config.excludeFromRecall.length === 2, `Expected 2 patterns, got ${config.excludeFromRecall.length}`);
   assert(config.excludeFromRecall[0] === 'CLAUDE.md', 'First pattern should be CLAUDE.md');
+  fs.rmSync(ws, { recursive: true });
+}
+
+// --- Test 26: resolveFileWeight — exact basename match ---
+console.log('Test 26: resolveFileWeight — exact basename match');
+{
+  const fw = { 'open-loops.md': 1.5, 'decisions/*.md': 1.3 };
+  const result = resolveFileWeight('open-loops.md', fw);
+  assert(result === 1.5, `Expected 1.5, got ${result}`);
+}
+
+// --- Test 27: resolveFileWeight — glob match ---
+console.log('Test 27: resolveFileWeight — glob match');
+{
+  const fw = { 'open-loops.md': 1.5, 'decisions/*.md': 1.3 };
+  const result = resolveFileWeight('decisions/2026-02-28.md', fw);
+  assert(result === 1.3, `Expected 1.3, got ${result}`);
+}
+
+// --- Test 28: resolveFileWeight — no match returns null ---
+console.log('Test 28: resolveFileWeight — no match returns null');
+{
+  const fw = { 'open-loops.md': 1.5 };
+  const result = resolveFileWeight('random/file.md', fw);
+  assert(result === null, `Expected null, got ${result}`);
+}
+
+// --- Test 29: resolveFileWeight — null/empty input ---
+console.log('Test 29: resolveFileWeight — null/empty input');
+{
+  assert(resolveFileWeight('test.md', null) === null, 'null weights returns null');
+  assert(resolveFileWeight('test.md', {}) === null, 'empty weights returns null');
+}
+
+// --- Test 30: loadConfig includes fileWeights default ---
+console.log('Test 30: loadConfig includes fileWeights default');
+{
+  const ws = tmpWorkspace();
+  const config = loadConfig(ws);
+  assert(typeof config.fileWeights === 'object', 'Should have fileWeights object');
+  assert(Object.keys(config.fileWeights).length === 0, 'Default should be empty');
+  fs.rmSync(ws, { recursive: true });
+}
+
+// --- Test 31: loadConfig preserves user fileWeights ---
+console.log('Test 31: loadConfig preserves user fileWeights');
+{
+  const ws = tmpWorkspace();
+  fs.writeFileSync(path.join(ws, '.memory', 'config.json'), JSON.stringify({
+    fileWeights: { 'open-loops.md': 1.5, 'decisions/*.md': 1.3 },
+  }));
+  const config = loadConfig(ws);
+  assert(config.fileWeights['open-loops.md'] === 1.5, 'Should preserve open-loops weight');
+  assert(config.fileWeights['decisions/*.md'] === 1.3, 'Should preserve decisions glob weight');
   fs.rmSync(ws, { recursive: true });
 }
 

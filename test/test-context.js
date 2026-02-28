@@ -4,7 +4,7 @@
  */
 const Database = require('better-sqlite3');
 const { SCHEMA } = require('../lib/store');
-const { getRelevantContext } = require('../lib/context');
+const { getRelevantContext, detectQueryIntent } = require('../lib/context');
 
 let passed = 0, failed = 0;
 
@@ -289,6 +289,133 @@ console.log('Test 16: Pure stop word query returns empty');
   const result = getRelevantContext(db, 'how is it going today');
   assert(result.chunks.length === 0, `Expected 0 chunks for pure stop words, got ${result.chunks.length}`);
   assert(result.text === '', 'Expected empty text for pure stop words');
+  db.close();
+}
+
+// ─── Test 17: detectQueryIntent — aggregation ───
+console.log('Test 17: detectQueryIntent — aggregation');
+{
+  const r1 = detectQueryIntent('What are all my supplements?');
+  assert(r1 !== null, 'Should detect aggregation intent');
+  assert(r1.intent === 'aggregation', `Expected aggregation, got ${r1?.intent}`);
+  assert(r1.maxChunks === 15, `Expected maxChunks=15, got ${r1?.maxChunks}`);
+  assert(r1.minCilScore === 0.10, `Expected minCilScore=0.10, got ${r1?.minCilScore}`);
+
+  const r2 = detectQueryIntent('Give me a summary of this week');
+  assert(r2 !== null && r2.intent === 'aggregation', 'summary should trigger aggregation');
+
+  const r3 = detectQueryIntent('List everything about the project');
+  assert(r3 !== null && r3.intent === 'aggregation', 'list everything should trigger aggregation');
+}
+
+// ─── Test 18: detectQueryIntent — reasoning ───
+console.log('Test 18: detectQueryIntent — reasoning');
+{
+  const r1 = detectQueryIntent('Why did I choose Redis over Postgres?');
+  assert(r1 !== null, 'Should detect reasoning intent');
+  assert(r1.intent === 'reasoning', `Expected reasoning, got ${r1?.intent}`);
+  assert(r1.typeBoosts.decision === 0.25, 'Should boost decision type');
+
+  const r2 = detectQueryIntent('What was the reason for the architecture change?');
+  assert(r2 !== null && r2.intent === 'reasoning', 'what was the reason should trigger reasoning');
+}
+
+// ─── Test 19: detectQueryIntent — action ───
+console.log('Test 19: detectQueryIntent — action');
+{
+  const r1 = detectQueryIntent('What should I work on next?');
+  assert(r1 !== null, 'Should detect action intent');
+  assert(r1.intent === 'action', `Expected action, got ${r1?.intent}`);
+  assert(r1.typeBoosts.action_item === 0.25, 'Should boost action_item type');
+
+  const r2 = detectQueryIntent("What's next on my todo?");
+  assert(r2 !== null && r2.intent === 'action', "what's next should trigger action");
+
+  const r3 = detectQueryIntent('What are my open loops?');
+  assert(r3 !== null && r3.intent === 'action', 'open loops should trigger action');
+}
+
+// ─── Test 20: detectQueryIntent — no intent ───
+console.log('Test 20: detectQueryIntent — no intent for normal queries');
+{
+  const r1 = detectQueryIntent('How is my creatine experiment going?');
+  assert(r1 === null, 'Normal query should return null intent');
+
+  const r2 = detectQueryIntent('What did Tom say about the restructuring?');
+  assert(r2 === null, 'Attribution query should return null intent');
+}
+
+// ─── Test 21: Config fileWeights override ───
+console.log('Test 21: Config fileWeights override — boost specific file');
+{
+  const db = createDb();
+  // Insert chunks from different files with same content relevance
+  insertChunk(db, { content: 'creatine supplement protocol daily 5g morning', filePath: 'open-loops.md', confidence: 1.0, createdAt: daysAgo(5), fileWeight: 1.0 });
+  insertChunk(db, { content: 'creatine supplement protocol daily experiment tracking notes', filePath: 'memory/2026-02-20.md', confidence: 1.0, createdAt: daysAgo(5), fileWeight: 1.0 });
+
+  // Without fileWeights — order depends on FTS/recency
+  const baseline = getRelevantContext(db, 'creatine supplement protocol');
+  assert(baseline.chunks.length >= 2, `Expected at least 2 chunks, got ${baseline.chunks.length}`);
+
+  // With fileWeights boosting open-loops.md
+  const boosted = getRelevantContext(db, 'creatine supplement protocol', {
+    fileWeights: { 'open-loops.md': 2.0 },
+  });
+  assert(boosted.chunks.length >= 2, `Expected at least 2 chunks, got ${boosted.chunks.length}`);
+  assert(boosted.chunks[0].filePath === 'open-loops.md', `Expected open-loops.md ranked first with fileWeight boost, got ${boosted.chunks[0].filePath}`);
+  db.close();
+}
+
+// ─── Test 22: Aggregation intent widens recall ───
+console.log('Test 22: Aggregation intent widens recall');
+{
+  const db = createDb();
+  seedFixture(db);
+  // "List everything about creatine" triggers aggregation intent
+  const result = getRelevantContext(db, 'List everything about creatine and project allocation');
+  // Aggregation intent lowers minCilScore to 0.10 and raises maxChunks to 15
+  assert(result.chunks.length > 0, `Expected chunks for aggregation query, got ${result.chunks.length}`);
+  db.close();
+}
+
+// ─── Test 23: Reasoning intent boosts decisions ───
+console.log('Test 23: Reasoning intent boosts decisions');
+{
+  const db = createDb();
+  seedFixture(db);
+  const result = getRelevantContext(db, 'Why did we decide to use DataSync as the API gateway?');
+  assert(result.chunks.length > 0, `Expected chunks, got ${result.chunks.length}`);
+  // Decision chunk about DataSync should rank high
+  const hasDecision = result.chunks.some(c => c.content.includes('DataSync'));
+  assert(hasDecision, 'Reasoning intent should surface decision chunks');
+  db.close();
+}
+
+// ─── Test 24: Forward-looking rescue — recent chunks found for future queries ───
+console.log('Test 24: Forward-looking rescue for future queries');
+{
+  const db = createDb();
+  // Insert a chunk from today about next week's plans
+  insertChunk(db, {
+    content: 'plans to deploy DataSync to production upcoming milestone deadline',
+    filePath: 'memory/2026-02-28.md',
+    chunkType: 'action_item',
+    confidence: 1.0,
+    createdAt: daysAgo(0),
+  });
+  // Insert an old chunk that shouldn't surface
+  insertChunk(db, {
+    content: 'deployed old version production deploy completed successfully',
+    filePath: 'memory/2026-01-15.md',
+    chunkType: 'fact',
+    confidence: 1.0,
+    createdAt: daysAgo(44),
+  });
+
+  const result = getRelevantContext(db, 'What are my plans for next week?');
+  assert(result.chunks.length > 0, `Expected chunks for forward query, got ${result.chunks.length}`);
+  const hasRecentPlan = result.chunks.some(c => c.content.includes('DataSync'));
+  assert(hasRecentPlan, 'Forward-looking rescue should find recent chunks about future plans');
   db.close();
 }
 

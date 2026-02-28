@@ -409,6 +409,50 @@ console.log('Test 30: Bare last week still works as range');
   assert(r.dateTerms.length === 0, 'Bare last week should have no dateTerms');
 }
 
+// ─── Test 31: Next week ───
+console.log('Test 31: Next week');
+{
+  // NOW = Feb 28 (Saturday). Next week starts Sunday Mar 1.
+  const r = resolveTemporalQuery('what are my plans for next week?', NOW);
+  assert(r.since.includes('2026-03-01'), `Expected since=2026-03-01, got ${r.since}`);
+  assert(r.until.includes('2026-03-08'), `Expected until=2026-03-08, got ${r.until}`);
+  assert(r.recencyBoost === 14, `Expected recencyBoost=14, got ${r.recencyBoost}`);
+  assert(r.forwardLooking === true, 'next week should set forwardLooking=true');
+  assert(!r.strippedQuery.includes('next week'), 'next week should be stripped');
+}
+
+// ─── Test 32: Forward-looking flag — next month ───
+console.log('Test 32: Forward-looking flag — next month');
+{
+  const r = resolveTemporalQuery('what is scheduled for next month?', NOW);
+  assert(r.forwardLooking === true, 'next month should set forwardLooking=true');
+}
+
+// ─── Test 33: Forward-looking flag — plan keywords ───
+console.log('Test 33: Forward-looking flag — plan keywords');
+{
+  const r = resolveTemporalQuery('what are my goals for this quarter?', NOW);
+  assert(r.forwardLooking === true, 'goals keyword should set forwardLooking=true');
+}
+
+// ─── Test 34: Forward-looking flag — no forward intent ───
+console.log('Test 34: No forward-looking flag for backward queries');
+{
+  const r = resolveTemporalQuery('what happened yesterday?', NOW);
+  assert(r.forwardLooking === false, 'yesterday should not set forwardLooking');
+}
+
+// ─── Test 35: Forward-looking — action keywords ───
+console.log('Test 35: Forward-looking — deadline/schedule keywords');
+{
+  const r1 = resolveTemporalQuery('what deadlines do I have?', NOW);
+  assert(r1.forwardLooking === true, 'deadline should set forwardLooking');
+  const r2 = resolveTemporalQuery('what is upcoming?', NOW);
+  assert(r2.forwardLooking === true, 'upcoming should set forwardLooking');
+  const r3 = resolveTemporalQuery('what is on my todo?', NOW);
+  assert(r3.forwardLooking === true, 'todo should set forwardLooking');
+}
+
 // ─── Summary ───
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
