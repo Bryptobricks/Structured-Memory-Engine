@@ -423,10 +423,16 @@ console.log('Test 24: Forward-looking rescue for future queries');
 console.log('Test 25: Forward-looking rescue — future named month searches forwardTerms');
 {
   const db = createDb();
-  // Chunk written recently but mentions "march" — content about future month
+  // Use a month that is always in the future relative to now
+  const now = new Date();
+  const futureMonth = new Date(now.getFullYear(), now.getMonth() + 2, 1); // 2 months ahead
+  const monthNames = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+  const futureMonthName = monthNames[futureMonth.getMonth()];
+
+  // Chunk written recently but mentions the future month
   insertChunk(db, {
-    content: 'In march we need to finalize the quarterly review and submit reports.',
-    filePath: 'memory/2026-02-27.md',
+    content: `In ${futureMonthName} we need to finalize the quarterly review and submit reports.`,
+    filePath: `memory/${daysAgo(1).split('T')[0]}.md`,
     chunkType: 'action_item',
     confidence: 1.0,
     createdAt: daysAgo(1),
@@ -440,10 +446,10 @@ console.log('Test 25: Forward-looking rescue — future named month searches for
     createdAt: daysAgo(54),
   });
 
-  const result = getRelevantContext(db, "What's coming up for me in March?");
+  const result = getRelevantContext(db, `What's coming up for me in ${futureMonthName}?`);
   assert(result.chunks.length > 0, `Expected chunks for future month query, got ${result.chunks.length}`);
-  const hasMarch = result.chunks.some(c => c.content.toLowerCase().includes('march'));
-  assert(hasMarch, 'Forward-looking rescue with forwardTerms should find chunks mentioning "march"');
+  const hasMonth = result.chunks.some(c => c.content.toLowerCase().includes(futureMonthName));
+  assert(hasMonth, `Forward-looking rescue with forwardTerms should find chunks mentioning "${futureMonthName}"`);
   db.close();
 }
 

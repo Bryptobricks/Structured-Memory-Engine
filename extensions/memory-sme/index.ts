@@ -23,6 +23,16 @@ const CAPTURE_TRIGGERS = [
   /\b(agreed|committed|promised|scheduled|deadline)\b/i,
 ];
 
+/**
+ * Strip conversation metadata injected by Telegram/OpenClaw before evaluation.
+ * Removes "Conversation info (untrusted metadata): ```json ... ```" blocks.
+ */
+function stripConversationMeta(text: string): string {
+  return text
+    .replace(/Conversation info\s*\(untrusted metadata\)\s*:\s*```[\s\S]*?```\s*/gi, "")
+    .trim();
+}
+
 function shouldCapture(text: string): string | null {
   if (!text || text.length < 20) return null;
   // Skip system messages, cron heartbeats, media metadata, recalled context blocks
@@ -33,6 +43,14 @@ function shouldCapture(text: string): string | null {
   if (/Cron:|scheduled reminder|handle this reminder/i.test(text)) return null;
   if (/inbound\/file_\d+---/i.test(text)) return null;
   if (/To send an image back/i.test(text)) return null;
+
+  // Bug 5: Skip code blocks, CLI output, git hashes
+  if ((text.match(/```/g) || []).length >= 2) return null;
+  if (/^\s*[\$>]|^\s*(node |npm |git |python |pip |brew )/m.test(text)) return null;
+  if (/\b(STDIN|STDOUT|STDERR|exit code|exited with)\b/i.test(text)) return null;
+  if (text.split("\n").length > 10) return null;
+  if (/\b[a-f0-9]{40}\b/.test(text)) return null;
+
   // Skip questions
   if (/^\s*(what|how|why|when|where|who|can|could|should|would|is|are|do|does)\b/i.test(text) && text.includes("?")) return null;
   if (/^(hi|hey|hello|thanks|ok|sure|got it|sounds good)/i.test(text.trim())) return null;
@@ -181,23 +199,43 @@ const memoryPlugin = {
 
     // --- Lifecycle hook: before_agent_start (auto-recall) ---
     if (autoRecall) {
+      // Bug 3: Dedup recall — OpenClaw fires before_agent_start twice per message
+      let _lastRecallPrompt = "";
+      let _lastRecallResult: any = undefined;
+      let _lastRecallTime = 0;
+
       api.on("before_agent_start", async (event: any) => {
         if (!event?.prompt || event.prompt.length < 5) return;
 
+        // Bug 6: Skip recall for cron/scheduled prompts — they have their own context
+        if (/Cron:|scheduled reminder|handle this reminder|\[cron:/i.test(event.prompt)) return;
+
+        // Bug 3: Deduplicate calls within 5s with same prompt
+        const cleanPrompt = stripConversationMeta(event.prompt);
+        const now = Date.now();
+        if (cleanPrompt === _lastRecallPrompt && (now - _lastRecallTime) < 5000) {
+          return _lastRecallResult;
+        }
+
         try {
-          const result = engine.context(event.prompt, {
+          const result = await engine.context(cleanPrompt, {
             maxTokens: autoRecallMaxTokens,
           });
 
-          if (!result.text || result.chunks.length === 0) return;
+          _lastRecallPrompt = cleanPrompt;
+          _lastRecallTime = now;
+
+          if (!result.text || result.chunks.length === 0) {
+            _lastRecallResult = undefined;
+            return;
+          }
 
           api.logger?.info?.(
             `memory-sme: injecting ${result.chunks.length} chunks (${result.tokenEstimate} tokens)`
           );
 
-          return {
-            prependContext: result.text,
-          };
+          _lastRecallResult = { prependContext: result.text };
+          return _lastRecallResult;
         } catch (err: any) {
           api.logger?.warn?.(`memory-sme: CIL recall failed: ${String(err)}`);
         }
@@ -206,21 +244,32 @@ const memoryPlugin = {
 
     // --- Lifecycle hook: agent_end (auto-capture) ---
     if (autoCapture) {
+      // Bug 7: Track processed message count — only evaluate NEW messages each turn
+      let _lastProcessedIndex = 0;
+
       api.on("agent_end", async (event: any) => {
         const messages = event?.messages;
         if (!Array.isArray(messages)) return;
 
+        // Only process messages we haven't seen yet
+        const newMessages = messages.slice(_lastProcessedIndex);
+        _lastProcessedIndex = messages.length;
+
         let captured = 0;
         const MAX_CAPTURES_PER_TURN = 3;
 
-        for (const msg of messages) {
+        for (const msg of newMessages) {
           if (captured >= MAX_CAPTURES_PER_TURN) break;
           if (msg.role !== "user") continue;
 
-          const text = typeof msg.content === "string"
+          const rawText = typeof msg.content === "string"
             ? msg.content
             : msg.content?.map?.((b: any) => b.text ?? "").join(" ") ?? "";
 
+          if (!rawText || rawText.length < 20) continue;
+
+          // Bug 1: Strip conversation metadata before evaluation
+          const text = stripConversationMeta(rawText);
           if (!text || text.length < 20) continue;
 
           const tag = shouldCapture(text);
@@ -231,7 +280,8 @@ const memoryPlugin = {
             : text;
 
           try {
-            engine.remember(truncated, { tag });
+            const result = await engine.remember(truncated, { tag });
+            if (result.skipped) continue; // Bug 2a: SME-level dedup caught it
             captured++;
             api.logger?.info?.(
               `memory-sme: auto-captured [${tag}] ${truncated.slice(0, 60)}…`

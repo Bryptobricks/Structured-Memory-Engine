@@ -293,6 +293,37 @@ console.log('Test 9: indexWorkspace — orphan file cleanup');
   }
 }
 
+// ─── Test 10: Heading-only chunks skipped ───
+console.log('Test 10: Heading-only chunks skipped');
+{
+  // "## Transcript" alone should be skipped (< 20 chars substantive)
+  const headingOnly = chunkMarkdown('## Transcript\n\n## Another Heading\nThis has real content that should be kept.');
+  // First section is heading-only → skipped. Second has content → kept.
+  const transcriptChunks = headingOnly.filter(c => c.content.includes('## Transcript') && !c.content.includes('real content'));
+  assert(transcriptChunks.length === 0, `Heading-only "## Transcript" should be skipped, found ${transcriptChunks.length}`);
+  const keptChunks = headingOnly.filter(c => c.content.includes('real content'));
+  assert(keptChunks.length === 1, `Content chunk should be kept, found ${keptChunks.length}`);
+}
+
+// ─── Test 11: Heading with trivial content skipped ───
+console.log('Test 11: Heading with trivial content skipped');
+{
+  const shortContent = chunkMarkdown('## Section\nOK\n\n## Real Section\nThis is a paragraph with enough content to be useful and indexed properly.');
+  // "OK" is only 2 chars after stripping heading → should be skipped (< 5 char threshold)
+  const okChunks = shortContent.filter(c => c.content.trim() === '## Section\nOK');
+  assert(okChunks.length === 0, `Heading with trivial content should be skipped, found ${okChunks.length}`);
+  assert(shortContent.length >= 1, `Should keep at least the real section, got ${shortContent.length}`);
+}
+
+// ─── Test 12: Normal chunks not affected by heading-only filter ───
+console.log('Test 12: Normal chunks not affected by heading-only filter');
+{
+  const normal = chunkMarkdown('# Key Facts\n\n- The sky is blue and has many interesting properties we should discuss\n\n# Decisions\n\n- Chose React for frontend because it has the best ecosystem and community support');
+  assert(normal.length === 2, `Normal content should produce 2 chunks, got ${normal.length}`);
+  assert(normal[0].heading === 'Key Facts', `First chunk heading should be "Key Facts", got "${normal[0].heading}"`);
+  assert(normal[1].heading === 'Decisions', `Second chunk heading should be "Decisions", got "${normal[1].heading}"`);
+}
+
 // ─── Summary ───
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

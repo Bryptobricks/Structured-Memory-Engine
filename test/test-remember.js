@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const Database = require('better-sqlite3');
-const { remember, VALID_TAGS } = require('../lib/remember');
+const { remember, VALID_TAGS, _resetDedupCache } = require('../lib/remember');
 const { SCHEMA } = require('../lib/store');
 const { indexWorkspace } = require('../lib/indexer');
 const { recall } = require('../lib/recall');
@@ -186,6 +186,51 @@ console.log('Test 10: No duplicate header on rapid calls');
   const content = fs.readFileSync(path.join(ws, 'memory', '2026-02-20.md'), 'utf-8');
   const headers = content.split('\n').filter(l => l.startsWith('# Session Log'));
   assert(headers.length === 1, `Expected exactly 1 header, got ${headers.length}`);
+  fs.rmSync(ws, { recursive: true });
+}
+
+// ─── Test 11: Duplicate content skipped (hash dedup) ───
+console.log('Test 11: Duplicate content skipped (hash dedup)');
+{
+  _resetDedupCache();
+  const ws = tmpWorkspace();
+  const r1 = remember(ws, 'Bromantane weekday-only protocol', { date: '2026-03-01' });
+  assert(r1.skipped !== true, 'First call should NOT be skipped');
+  assert(r1.line !== null, 'First call should have a line');
+
+  const r2 = remember(ws, 'Bromantane weekday-only protocol', { date: '2026-03-01' });
+  assert(r2.skipped === true, 'Duplicate content should be skipped');
+  assert(r2.line === null, 'Skipped result should have null line');
+
+  const content = fs.readFileSync(r1.filePath, 'utf-8');
+  const tagged = content.split('\n').filter(l => l.startsWith('- ['));
+  assert(tagged.length === 1, `Expected exactly 1 entry (deduped), got ${tagged.length}`);
+  fs.rmSync(ws, { recursive: true });
+}
+
+// ─── Test 12: Different content same day not skipped ───
+console.log('Test 12: Different content same day not skipped');
+{
+  _resetDedupCache();
+  const ws = tmpWorkspace();
+  remember(ws, 'Started creatine protocol today', { date: '2026-03-01' });
+  const r2 = remember(ws, 'Decided to switch to PostgreSQL', { date: '2026-03-01' });
+  assert(r2.skipped !== true, 'Different content should NOT be skipped');
+
+  const content = fs.readFileSync(path.join(ws, 'memory', '2026-03-01.md'), 'utf-8');
+  const tagged = content.split('\n').filter(l => l.startsWith('- ['));
+  assert(tagged.length === 2, `Expected 2 entries for different content, got ${tagged.length}`);
+  fs.rmSync(ws, { recursive: true });
+}
+
+// ─── Test 13: Same content different days not skipped ───
+console.log('Test 13: Same content different days not skipped');
+{
+  _resetDedupCache();
+  const ws = tmpWorkspace();
+  remember(ws, 'Daily standup completed', { date: '2026-03-01' });
+  const r2 = remember(ws, 'Daily standup completed', { date: '2026-03-02' });
+  assert(r2.skipped !== true, 'Same content on different day should NOT be skipped');
   fs.rmSync(ws, { recursive: true });
 }
 
