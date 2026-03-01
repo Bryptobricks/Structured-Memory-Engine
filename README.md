@@ -6,7 +6,7 @@
 npm install structured-memory-engine
 ```
 
-Persistent, self-maintaining memory that runs locally. No API calls, no cloud, no ongoing cost. **915 tests. <1ms recall. $0/month forever.**
+Persistent, self-maintaining memory that runs locally. No API calls, no cloud, no ongoing cost. **932 tests. <1ms recall. $0/month forever.**
 
 <!-- TODO: Add demo GIF here -->
 <!-- ![SME Demo](assets/demo.gif) -->
@@ -34,7 +34,7 @@ AI agents have amnesia. Every session starts from zero. Your agent doesn't remem
 | **Contradiction Resolution** | CLI commands to resolve conflicts without editing source files | **One command fixes it** — `resolve 42 --action keep-newer` instead of hunting through markdown |
 | **Configurable Decay** | Tunable half-life and decay rate per workspace | **Your workspace, your rules** — fast-moving projects decay in 90 days, core knowledge lives forever |
 | **Memory Lifecycle** | Automatic decay, reinforcement, staleness detection, and pruning | **Self-cleaning index** — frequently-used memories get stronger, stale ones fade. Zero maintenance. |
-| **Auto-Capture** | Detects decisions, preferences, and facts from conversation and saves them | **Never "remember to write it down" again** — 3 captures/turn, zero friction |
+| **Auto-Capture** | Detects decisions, preferences, and facts from conversation and saves them | **Never "remember to write it down" again** — 3 captures/turn, SHA-256 dedup, zero friction |
 | **Transcript Ingestion** | Parses meeting recordings into tagged, searchable markdown | **60 meetings → searchable in one command.** Every decision, action item, and quote indexed. |
 | **Token Budgeting** | Retrieves only what fits in a configurable token window | **No context overflow** — relevant memories in 1,500 tokens, not 50,000 |
 | **Offline / Zero Cost** | SQLite FTS5 + local embeddings, no API calls | **$0/month forever.** No rate limits, no API keys, no vendor lock-in |
@@ -576,7 +576,7 @@ sme restore <chunk-id>
 ## Testing
 
 ```bash
-npm test  # 18 suites, 915 tests
+npm test  # 18 suites, 932 tests
 ```
 
 ## License
