@@ -4,7 +4,7 @@
  */
 const Database = require('better-sqlite3');
 const { SCHEMA } = require('../lib/store');
-const { getRelevantContext, detectQueryIntent } = require('../lib/context');
+const { getRelevantContext, detectQueryIntent, isRuleChunk, applyRulePenalty } = require('../lib/context');
 
 let passed = 0, failed = 0;
 
@@ -529,6 +529,246 @@ console.log('Test 28: Action intent injects action-related search terms');
   assert(result.chunks.length > 0, `Expected chunks for action query with injected terms, got ${result.chunks.length}`);
   const hasActionContent = result.chunks.some(c => c.content.includes('Pending') || c.content.includes('Loop'));
   assert(hasActionContent, 'Action intent should surface action items via injected search terms');
+  db.close();
+}
+
+// ─── Test 29: Priority file injection — open-loops.md surfaces for action queries ───
+console.log('Test 29: Priority file injection — open-loops.md guaranteed for action intent');
+{
+  const db = createDb();
+  // Insert open-loops content that does NOT match "focused" or "right now" via FTS
+  insertChunk(db, {
+    content: 'Ship v2.0 release candidate by end of sprint. Coordinate with QA team.',
+    heading: 'Critical Priorities',
+    filePath: 'memory/open-loops.md',
+    chunkType: 'action_item',
+    confidence: 1.0,
+    createdAt: daysAgo(1),
+    fileWeight: 2.0,
+  });
+  insertChunk(db, {
+    content: 'Follow up with vendor on hardware delivery estimate. Still outstanding.',
+    heading: 'Open Items',
+    filePath: 'memory/open-loops.md',
+    chunkType: 'action_item',
+    confidence: 1.0,
+    createdAt: daysAgo(2),
+    fileWeight: 2.0,
+  });
+  // Insert some noise that matches "focused" via FTS
+  insertChunk(db, {
+    content: 'Stayed focused during the afternoon meeting, discussed roadmap priorities.',
+    filePath: 'memory/2026-02-25.md',
+    chunkType: 'raw',
+    confidence: 1.0,
+    createdAt: daysAgo(3),
+  });
+
+  const result = getRelevantContext(db, 'What should I be focused on right now?');
+  assert(result.chunks.length > 0, `Expected chunks, got ${result.chunks.length}`);
+  const hasOpenLoops = result.chunks.some(c => c.filePath && c.filePath.includes('open-loops'));
+  assert(hasOpenLoops, 'Priority file injection should guarantee open-loops.md appears for action queries');
+  // open-loops chunks should be in top 3
+  const top3 = result.chunks.slice(0, 3);
+  const openLoopsInTop3 = top3.some(c => c.filePath && c.filePath.includes('open-loops'));
+  assert(openLoopsInTop3, 'Injected open-loops chunks should be in top 3 results');
+  db.close();
+}
+
+// ─── Test 30: Priority file injection — self-review surfaces for action queries ───
+console.log('Test 30: Priority file injection — self-review surfaces for action intent');
+{
+  const db = createDb();
+  insertChunk(db, {
+    content: 'Self-review: need to improve test coverage and reduce tech debt in auth module.',
+    heading: 'Action Items',
+    filePath: 'memory/self-review-2026-02.md',
+    chunkType: 'action_item',
+    confidence: 1.0,
+    createdAt: daysAgo(3),
+  });
+  insertChunk(db, {
+    content: 'Random daily note about weather and lunch plans for the day.',
+    filePath: 'memory/2026-02-26.md',
+    chunkType: 'raw',
+    confidence: 1.0,
+    createdAt: daysAgo(2),
+  });
+
+  const result = getRelevantContext(db, 'What should I be focused on right now?');
+  const hasSelfReview = result.chunks.some(c => c.filePath && c.filePath.includes('self-review'));
+  assert(hasSelfReview, 'Self-review file should be injected for action queries');
+  db.close();
+}
+
+// ─── Test 31: Priority file injection — does NOT fire for non-action queries ───
+console.log('Test 31: Priority file injection — no injection for non-action queries');
+{
+  const db = createDb();
+  // open-loops content that doesn't match "creatine"
+  insertChunk(db, {
+    content: 'Ship v2.0 release candidate by end of sprint.',
+    heading: 'Critical Priorities',
+    filePath: 'memory/open-loops.md',
+    chunkType: 'action_item',
+    confidence: 1.0,
+    createdAt: daysAgo(1),
+    fileWeight: 2.0,
+  });
+  // Creatine content
+  insertChunk(db, {
+    content: 'Creatine 5g daily started Feb 23. Day 1: improved recovery.',
+    heading: 'Supplements',
+    filePath: 'MEMORY.md',
+    chunkType: 'fact',
+    confidence: 1.0,
+    createdAt: daysAgo(4),
+    fileWeight: 1.5,
+  });
+
+  const result = getRelevantContext(db, "How's the creatine experiment going?");
+  // open-loops should NOT be injected for a non-action query
+  const hasOpenLoops = result.chunks.some(c => c.filePath && c.filePath.includes('open-loops'));
+  assert(!hasOpenLoops, 'open-loops.md should NOT be injected for non-action queries');
+  db.close();
+}
+
+// ─── Test 32: Priority file injection — dedup when already in FTS results ───
+console.log('Test 32: Priority file injection — dedup when chunks already in FTS results');
+{
+  const db = createDb();
+  // open-loops content that WILL match via FTS (contains "pending", "task")
+  insertChunk(db, {
+    content: 'Pending task: review PR for authentication module. Priority item.',
+    heading: 'Open Loops',
+    filePath: 'memory/open-loops.md',
+    chunkType: 'action_item',
+    confidence: 1.0,
+    createdAt: daysAgo(1),
+    fileWeight: 2.0,
+  });
+
+  const result = getRelevantContext(db, 'What should I be focused on right now?');
+  // Count how many times open-loops.md appears — should be exactly once (no dupes)
+  const openLoopsChunks = result.chunks.filter(c => c.filePath && c.filePath.includes('open-loops'));
+  assert(openLoopsChunks.length === 1, `Expected exactly 1 open-loops chunk (dedup), got ${openLoopsChunks.length}`);
+  db.close();
+}
+
+// ─── Test 33: isRuleChunk — strong rule detection ───
+console.log('Test 33: isRuleChunk — strong rule patterns detected');
+{
+  const r1 = isRuleChunk({ content: 'NON-NEGOTIABLE: Never commit API keys to the repository.', heading: 'Security Rules' });
+  assert(r1.isRule === true, 'NON-NEGOTIABLE should be detected as rule');
+  assert(r1.confidence === 0.9, `Expected confidence 0.9, got ${r1.confidence}`);
+
+  const r2 = isRuleChunk({ content: 'Hard rules for Amazon account purchases.', heading: '' });
+  assert(r2.isRule === true, 'Hard rules should be detected');
+  assert(r2.confidence === 0.9, `Expected confidence 0.9, got ${r2.confidence}`);
+
+  const r3 = isRuleChunk({ content: 'Always require two-factor authentication before any deployment.', heading: '' });
+  assert(r3.isRule === true, '"always require" should be detected');
+}
+
+// ─── Test 34: isRuleChunk — moderate rule detection ───
+console.log('Test 34: isRuleChunk — moderate rule patterns detected');
+{
+  const r1 = isRuleChunk({ content: 'Company policy: all expenses over $500 need manager sign-off. No exceptions.', heading: '' });
+  assert(r1.isRule === true, 'policy + no exceptions should be detected as rule');
+  assert(r1.confidence === 0.7, `Expected confidence 0.7 for two moderate matches, got ${r1.confidence}`);
+
+  const r2 = isRuleChunk({ content: 'Token efficiency guidelines for API usage.', heading: '' });
+  assert(r2.isRule === true, '"guidelines" should be detected');
+  assert(r2.confidence === 0.4, `Expected confidence 0.4 for single moderate match, got ${r2.confidence}`);
+}
+
+// ─── Test 35: isRuleChunk — non-rule content ───
+console.log('Test 35: isRuleChunk — normal content not flagged');
+{
+  const r1 = isRuleChunk({ content: 'Ordered new headphones from Amazon, expected delivery March 5.', heading: 'Purchases' });
+  assert(r1.isRule === false, 'Purchase fact should not be flagged as rule');
+
+  const r2 = isRuleChunk({ content: 'Weight dropped to 197 from 215 since starting retatrutide.', heading: 'Health' });
+  assert(r2.isRule === false, 'Health fact should not be flagged as rule');
+}
+
+// ─── Test 36: Rule penalty — rules demoted for factual queries ───
+console.log('Test 36: Rule penalty — rule chunks demoted for factual queries');
+{
+  const db = createDb();
+  // Rule chunk that will match "purchase" via FTS
+  insertChunk(db, {
+    content: 'Amazon Account Hard Rules: NON-NEGOTIABLE. Never purchase without checking price history first.',
+    heading: 'Account Rules',
+    filePath: 'TOOLS.md',
+    chunkType: 'confirmed',
+    confidence: 1.0,
+    createdAt: daysAgo(10),
+    fileWeight: 1.1,
+  });
+  // Factual chunk about an actual purchase
+  insertChunk(db, {
+    content: 'Ordered SmartWings blinds for bedroom, purchase confirmed, shipping 2-3 weeks.',
+    heading: 'Purchases',
+    filePath: 'MEMORY.md',
+    chunkType: 'fact',
+    confidence: 1.0,
+    createdAt: daysAgo(5),
+    fileWeight: 1.5,
+  });
+
+  const result = getRelevantContext(db, 'What purchases am I still waiting on?');
+  assert(result.chunks.length > 0, `Expected chunks, got ${result.chunks.length}`);
+  // The factual purchase should outrank the rule
+  if (result.chunks.length >= 2) {
+    const ruleIdx = result.chunks.findIndex(c => c.content.includes('NON-NEGOTIABLE'));
+    const factIdx = result.chunks.findIndex(c => c.content.includes('SmartWings'));
+    if (ruleIdx >= 0 && factIdx >= 0) {
+      assert(factIdx < ruleIdx, `Factual purchase (idx ${factIdx}) should outrank rule chunk (idx ${ruleIdx})`);
+    }
+  }
+  db.close();
+}
+
+// ─── Test 37: Rule penalty — escape hatch for rule-specific queries ───
+console.log('Test 37: Rule penalty — no penalty when asking about rules');
+{
+  const db = createDb();
+  insertChunk(db, {
+    content: 'NON-NEGOTIABLE: Never purchase without checking price history first. Hard rules for account.',
+    heading: 'Amazon Account Rules',
+    filePath: 'TOOLS.md',
+    chunkType: 'confirmed',
+    confidence: 1.0,
+    createdAt: daysAgo(10),
+    fileWeight: 1.1,
+  });
+
+  const result = getRelevantContext(db, 'What are my Amazon account rules?');
+  assert(result.chunks.length > 0, `Expected chunks, got ${result.chunks.length}`);
+  const hasRules = result.chunks.some(c => c.content.includes('NON-NEGOTIABLE'));
+  assert(hasRules, 'Rule chunks should still appear when user asks about rules (escape hatch)');
+  db.close();
+}
+
+// ─── Test 38: Rule penalty — no penalty for reasoning intent ───
+console.log('Test 38: Rule penalty — reasoning queries preserve rule chunks');
+{
+  const db = createDb();
+  insertChunk(db, {
+    content: 'Policy decision: mandatory code review before any merge. No exceptions allowed.',
+    heading: 'Engineering Guidelines',
+    filePath: 'MEMORY.md',
+    chunkType: 'decision',
+    confidence: 1.0,
+    createdAt: daysAgo(5),
+    fileWeight: 1.5,
+  });
+
+  const result = getRelevantContext(db, 'Why did we decide to require mandatory code reviews?');
+  assert(result.chunks.length > 0, `Expected chunks, got ${result.chunks.length}`);
+  const hasPolicy = result.chunks.some(c => c.content.includes('mandatory code review'));
+  assert(hasPolicy, 'Reasoning intent should not penalize rule-like decision chunks');
   db.close();
 }
 
