@@ -1,0 +1,47 @@
+{
+  "id": "memory-sme",
+  "kind": "memory",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "workspace": {
+        "type": "string",
+        "description": "SME workspace path (default: agent workspace)"
+      },
+      "fileTypeDefaults": {
+        "type": "object",
+        "description": "Map file patterns to chunk types"
+      },
+      "reflectInterval": {
+        "type": "string",
+        "description": "Auto-reflect interval (e.g. '6h', '12h')"
+      },
+      "autoIndex": {
+        "type": "boolean",
+        "default": true,
+        "description": "Index workspace on startup"
+      },
+      "autoRecall": {
+        "type": "boolean",
+        "default": true,
+        "description": "Automatically inject relevant memories before each agent turn"
+      },
+      "autoRecallMaxTokens": {
+        "type": "number",
+        "default": 1500,
+        "description": "Max tokens for auto-injected context"
+      },
+      "autoCapture": {
+        "type": "boolean",
+        "default": true,
+        "description": "Automatically capture decisions, preferences, and facts from user messages"
+      },
+      "captureMaxChars": {
+        "type": "number",
+        "default": 500,
+        "description": "Max characters per auto-captured memory"
+      }
+    }
+  }
+}

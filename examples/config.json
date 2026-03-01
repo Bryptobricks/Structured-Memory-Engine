@@ -1,0 +1,25 @@
+{
+  "owner": "Alex",
+
+  "include": [
+    "CLAUDE.md",
+    "TOOLS.md"
+  ],
+
+  "includeGlobs": [
+    "agents/*.md",
+    "skills/*.md",
+    "plans/*.md"
+  ],
+
+  "fileTypeDefaults": {
+    "MEMORY.md": "confirmed",
+    "USER.md": "confirmed",
+    "CLAUDE.md": "confirmed",
+    "TOOLS.md": "confirmed",
+    "memory/*.md": "fact",
+    "agents/*.md": "fact",
+    "skills/*.md": "fact",
+    "plans/*.md": "inferred"
+  }
+}
