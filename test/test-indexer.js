@@ -324,6 +324,97 @@ console.log('Test 12: Normal chunks not affected by heading-only filter');
   assert(normal[1].heading === 'Decisions', `Second chunk heading should be "Decisions", got "${normal[1].heading}"`);
 }
 
+// ─── Test 13: extractEntities — acronyms ───
+console.log('Test 13: extractEntities — acronyms');
+{
+  const entities = extractEntities('Working on the SME and GETIS projects using the API');
+  assert(entities.includes('SME'), `Should extract SME, got ${entities}`);
+  assert(entities.includes('GETIS'), `Should extract GETIS, got ${entities}`);
+  assert(entities.includes('API'), `Should extract API, got ${entities}`);
+  // Should skip common non-entity uppercase (OK, AM, PM etc. if present)
+  const skip = extractEntities('OK fine, AM session at 10 PM');
+  assert(!skip.includes('OK'), 'Should skip OK');
+  assert(!skip.includes('AM'), 'Should skip AM');
+  assert(!skip.includes('PM'), 'Should skip PM');
+}
+
+// ─── Test 14: extractEntities — tickers ───
+console.log('Test 14: extractEntities — tickers');
+{
+  const entities = extractEntities('Bought $BTC and $ETH, considering $SOL');
+  assert(entities.includes('$BTC'), `Should extract $BTC, got ${entities}`);
+  assert(entities.includes('$ETH'), `Should extract $ETH, got ${entities}`);
+  assert(entities.includes('$SOL'), `Should extract $SOL, got ${entities}`);
+}
+
+// ─── Test 15: extractEntities — quoted terms ───
+console.log('Test 15: extractEntities — quoted terms');
+{
+  const entities = extractEntities('Switched to "dark mode" and configured "JetBrains Mono" font');
+  assert(entities.includes('dark mode'), `Should extract "dark mode", got ${entities}`);
+  assert(entities.includes('JetBrains Mono'), `Should extract "JetBrains Mono", got ${entities}`);
+  // Short quotes (<3 chars) should be skipped
+  const short = extractEntities('Said "hi" to the team');
+  assert(!short.includes('hi'), 'Should skip short quoted terms');
+}
+
+// ─── Test 16: extractEntities — URLs ───
+console.log('Test 16: extractEntities — URLs');
+{
+  const entities = extractEntities('Deployed to https://example.com/api and docs at http://docs.example.com');
+  assert(entities.some(e => e.includes('example.com/api')), `Should extract URL, got ${entities}`);
+  assert(entities.some(e => e.includes('docs.example.com')), `Should extract second URL, got ${entities}`);
+}
+
+// ─── Test 17: extractEntities — mixed new + old patterns ───
+console.log('Test 17: extractEntities — mixed new + old patterns');
+{
+  const entities = extractEntities('@alice uses **creatine** for the SME project, tracking $BTC via "DeFi dashboard"');
+  assert(entities.includes('@alice'), 'Should still find @mentions');
+  assert(entities.includes('creatine'), 'Should still find **bold**');
+  assert(entities.includes('SME'), 'Should find acronym');
+  assert(entities.includes('$BTC'), 'Should find ticker');
+  assert(entities.includes('DeFi dashboard'), 'Should find quoted term');
+}
+
+// ─── Test 18: Speaker-turn splitting for oversized transcript chunks ───
+console.log('Test 18: Speaker-turn splitting for oversized transcript chunks');
+{
+  // Build a transcript-style text >2000 chars with speaker turns but no paragraph breaks
+  const turn1 = 'Alice: ' + 'This is a really long discussion about architecture. '.repeat(20);
+  const turn2 = 'Bob: ' + 'I agree and here are my thoughts on the database design. '.repeat(20);
+  const turn3 = 'Alice: ' + 'Great points, let me elaborate on the caching strategy. '.repeat(20);
+  const transcript = `# Meeting Notes\n${turn1}\n${turn2}\n${turn3}`;
+  assert(transcript.length > 2000, `Transcript should be >2000 chars, got ${transcript.length}`);
+
+  const chunks = chunkMarkdown(transcript);
+  assert(chunks.length >= 2, `Should split transcript into 2+ chunks, got ${chunks.length}`);
+  // No chunk should exceed MAX_CHUNK (2000) by more than a small margin
+  for (const c of chunks) {
+    assert(c.content.length <= 2500, `Chunk should not be massively oversized, got ${c.content.length}`);
+  }
+}
+
+// ─── Test 19: Timestamp-based speaker turns ───
+console.log('Test 19: Timestamp-based speaker turns');
+{
+  const turn1 = '[00:00] Alice: ' + 'Discussion point one about the project scope and timeline. '.repeat(20);
+  const turn2 = '[05:30] Bob: ' + 'Response about budget constraints and resource allocation. '.repeat(20);
+  const turn3 = '[10:15] Alice: ' + 'Follow-up on the technical implementation details. '.repeat(20);
+  const transcript = `# Standup\n${turn1}\n${turn2}\n${turn3}`;
+
+  const chunks = chunkMarkdown(transcript);
+  assert(chunks.length >= 2, `Should split timestamped transcript into 2+ chunks, got ${chunks.length}`);
+}
+
+// ─── Test 20: Small content not affected by speaker-turn splitting ───
+console.log('Test 20: Small content not affected by speaker-turn splitting');
+{
+  const small = '# Meeting\nAlice: Hello\nBob: Hi there\nAlice: Let\'s discuss the agenda';
+  const chunks = chunkMarkdown(small);
+  assert(chunks.length === 1, `Small content should stay as 1 chunk, got ${chunks.length}`);
+}
+
 // ─── Summary ───
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

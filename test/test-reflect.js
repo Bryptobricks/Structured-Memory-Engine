@@ -4,7 +4,10 @@
  */
 const Database = require('better-sqlite3');
 const { SCHEMA } = require('../lib/store');
-const { decayConfidence, reinforceConfidence, markStale, detectContradictions, pruneStale, restoreChunk, resolveContradiction, runReflectCycle } = require('../lib/reflect');
+const { decayConfidence, reinforceConfidence, markStale, detectContradictions, pruneStale, restoreChunk, resolveContradiction, runReflectCycle, listContradictions, getLastReflectTime, setLastReflectTime } = require('../lib/reflect');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
 
 let passed = 0, failed = 0;
 
@@ -462,6 +465,52 @@ console.log('Test 21: runReflectCycle uses config — temporal awareness');
   const resultWithConfig = runReflectCycle(db, { dryRun: true, config });
   assert(resultWithConfig.contradictions.newFlags === 0, `Expected 0 contradictions with temporal awareness, got ${resultWithConfig.contradictions.newFlags}`);
   db.close();
+}
+
+// ─── Test 22: listContradictions returns unresolved ───
+console.log('Test 22: listContradictions returns unresolved');
+{
+  const db = createDb();
+  const now = new Date().toISOString();
+  // Needs 3+ shared terms + negation to trigger contradiction. "database", "primary", "production", "backend" are shared.
+  insertChunk(db, { content: 'Uses PostgreSQL as the primary production database for the backend service layer', heading: 'Database', entities: '[]', chunkType: 'decision', confidence: 1.0, createdAt: now, filePath: 'a.md' });
+  insertChunk(db, { content: 'No longer uses PostgreSQL as primary production database, switched the backend to SQLite', heading: 'Database', entities: '[]', chunkType: 'decision', confidence: 1.0, createdAt: now, filePath: 'b.md' });
+
+  detectContradictions(db);
+  const unresolved = listContradictions(db);
+  assert(unresolved.length > 0, `Should find unresolved contradictions, got ${unresolved.length}`);
+  assert(unresolved[0].chunkOld.content.length > 0, 'Should include chunk content');
+  assert(unresolved[0].chunkNew.content.length > 0, 'Should include chunk content');
+  assert(unresolved[0].reason.length > 0, 'Should include reason');
+
+  // Resolve one
+  resolveContradiction(db, unresolved[0].id, 'keep-newer');
+  const afterResolve = listContradictions(db);
+  assert(afterResolve.length === 0, `Should have 0 unresolved after resolution, got ${afterResolve.length}`);
+
+  // includeResolved shows it
+  const resolved = listContradictions(db, { resolved: true });
+  assert(resolved.length > 0, `Should show resolved contradictions when asked, got ${resolved.length}`);
+  db.close();
+}
+
+// ─── Test 23: getLastReflectTime / setLastReflectTime ───
+console.log('Test 23: getLastReflectTime / setLastReflectTime');
+{
+  const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'sme-test-'));
+  fs.mkdirSync(path.join(ws, '.memory'), { recursive: true });
+
+  // Should return 0 when no file exists
+  const initial = getLastReflectTime(ws);
+  assert(initial === 0, `Should return 0 for no-file, got ${initial}`);
+
+  // Set and read back
+  setLastReflectTime(ws);
+  const afterSet = getLastReflectTime(ws);
+  assert(afterSet > 0, `Should return positive timestamp, got ${afterSet}`);
+  assert(Date.now() - afterSet < 5000, 'Should be within last 5 seconds');
+
+  fs.rmSync(ws, { recursive: true });
 }
 
 // ─── Summary ───

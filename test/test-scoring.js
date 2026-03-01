@@ -239,8 +239,8 @@ console.log('Test 11: cilScore delegates to shared scorer');
   assert(Math.abs(fromCil - fromShared) < 0.001, `cilScore (${fromCil.toFixed(4)}) should match shared score (${fromShared.toFixed(4)})`);
 }
 
-// ─── Test 12: CIL pipeline does not inflate access_count ───
-console.log('Test 12: CIL pipeline does not inflate access_count (skipTracking)');
+// ─── Test 12: CIL pipeline increments access_count ───
+console.log('Test 12: CIL pipeline increments access_count');
 {
   const db = createDb();
   insertChunk(db, {
@@ -258,9 +258,9 @@ console.log('Test 12: CIL pipeline does not inflate access_count (skipTracking)'
   const result = getRelevantContext(db, "How's the creatine experiment going?");
   assert(result.chunks.length > 0, `CIL should find chunks, got ${result.chunks.length}`);
 
-  // Access count should still be 0 — CIL uses skipTracking
+  // Access count should be incremented — CIL now tracks access for reinforcement
   const row = db.prepare('SELECT access_count FROM chunks').get();
-  assert(row.access_count === 0, `CIL should not inflate access_count, got ${row.access_count}`);
+  assert(row.access_count >= 1, `CIL should increment access_count, got ${row.access_count}`);
   db.close();
 }
 

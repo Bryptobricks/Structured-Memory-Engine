@@ -113,7 +113,7 @@ console.log('Test 4: handleReflect formatting');
   insertChunk(db, { content: 'old fact about something', chunkType: 'inferred', confidence: 0.5, createdAt: new Date(Date.now() - 200 * 86400000).toISOString() });
   insertChunk(db, { content: 'recent fact', chunkType: 'fact', confidence: 1.0 });
 
-  const result = await handleReflect(db, { dryRun: true });
+  const result = await handleReflect(db, { dryRun: true }, null, ws);
   const text = result.content[0].text;
   assert(text.includes('[DRY RUN]'), 'Expected DRY RUN prefix');
   assert(text.includes('Decayed:'), 'Expected Decayed count');
@@ -461,6 +461,25 @@ console.log('Test 20: handleIndex — cleaned count in output');
   const text = result.content[0].text;
   assert(text.includes('Cleaned:'), `Expected Cleaned count in output, got: ${text}`);
 
+  db.close();
+  fs.rmSync(ws, { recursive: true });
+}
+
+// ─── Test 21: handleReflect shows unresolved contradiction reminder ───
+console.log('Test 21: handleReflect shows unresolved contradiction reminder');
+{
+  const ws = tmpWorkspace();
+  const db = createDb(ws);
+  const now = new Date().toISOString();
+  // Insert two contradicting chunks in different files (need 3+ shared terms + negation)
+  insertChunk(db, { content: 'Uses PostgreSQL as the primary production database for the backend service layer', heading: 'Database Choice', chunkType: 'decision', confidence: 1.0, filePath: 'a.md', createdAt: now });
+  insertChunk(db, { content: 'No longer uses PostgreSQL as primary production database, switched the backend to SQLite', heading: 'Database Choice', chunkType: 'decision', confidence: 1.0, filePath: 'b.md', createdAt: now });
+
+  // Run reflect (non-dry) to detect the contradiction
+  const result = await handleReflect(db, { dryRun: false }, null, ws);
+  const text = result.content[0].text;
+  assert(text.includes('unresolved contradiction'), `Expected unresolved reminder, got: ${text}`);
+  assert(text.includes('sme_contradictions'), 'Should mention sme_contradictions tool');
   db.close();
   fs.rmSync(ws, { recursive: true });
 }
