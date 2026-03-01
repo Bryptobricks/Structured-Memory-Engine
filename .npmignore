@@ -1,0 +1,22 @@
+# Tests
+test/
+benchmarks/
+
+# Extensions (OpenClaw plugin — install separately)
+extensions/
+
+# Examples and docs
+examples/
+ROADMAP.md
+SKILL.md
+
+# Dev files
+.memory/
+.git/
+.github/
+.corrections.json
+.memory-hashes.json
+
+# Data
+data/
+ingest/

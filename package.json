@@ -1,0 +1,63 @@
+{
+  "name": "structured-memory-engine",
+  "version": "6.4.1",
+  "description": "Persistent, self-maintaining memory for AI agents. Local SQLite FTS5, zero API calls, <1ms recall.",
+  "main": "lib/api.js",
+  "exports": {
+    ".": "./lib/api.js",
+    "./mcp": "./lib/mcp-server.js"
+  },
+  "scripts": {
+    "index": "node lib/index.js index",
+    "query": "node lib/index.js query",
+    "status": "node lib/index.js status",
+    "mcp": "node lib/mcp-server.js",
+    "bench": "node benchmarks/run.js",
+    "test": "node test/test-store.js && node test/test-retain.js && node test/test-reflect.js && node test/test-recall.js && node test/test-indexer.js && node test/test-remember.js && node test/test-mcp.js && node test/test-config.js && node test/test-api.js && node test/test-context.js && node test/test-plugin-hooks.js && node test/test-entities.js && node test/test-embeddings.js && node test/test-scoring.js && node test/test-ingest.js && node test/test-recall-logger.js && node test/test-temporal.js && node test/test-query-strip.js",
+    "test:recall": "node scripts/recall-test.js",
+    "test:all": "npm test && node scripts/recall-test.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.0",
+    "better-sqlite3": "^11.8.1",
+    "zod": "^3.25.0"
+  },
+  "bin": {
+    "sme": "lib/index.js"
+  },
+  "files": [
+    "lib/",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "memory",
+    "ai",
+    "agent",
+    "mcp",
+    "sqlite",
+    "fts5",
+    "knowledge-base",
+    "claude",
+    "openclaw",
+    "structured-memory"
+  ],
+  "author": "Bryptobricks",
+  "homepage": "https://github.com/Bryptobricks/Structured-Memory-Engine#readme",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Bryptobricks/Structured-Memory-Engine.git"
+  },
+  "peerDependencies": {
+    "@xenova/transformers": "^2.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@xenova/transformers": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

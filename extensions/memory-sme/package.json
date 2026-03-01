@@ -1,0 +1,14 @@
+{
+  "name": "@openclaw/memory-sme",
+  "version": "1.0.0",
+  "private": true,
+  "description": "OpenClaw memory plugin backed by Structured Memory Engine",
+  "type": "module",
+  "main": "index.ts",
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.0"
+  },
+  "peerDependencies": {
+    "structured-memory-engine": ">=5.0.0"
+  }
+}

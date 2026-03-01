@@ -1,0 +1,8 @@
+{
+  "job": ["work", "career", "employment"],
+  "work": ["job", "career", "employment"],
+  "money": ["funds", "capital", "portfolio", "wallet"],
+  "health": ["medical", "blood", "labs", "protocol"],
+  "home": ["apartment", "bedroom", "living"],
+  "crypto": ["defi", "token", "chain", "wallet"]
+}
