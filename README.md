@@ -6,7 +6,7 @@
 npm install structured-memory-engine
 ```
 
-Persistent, self-maintaining memory that runs locally. No API calls, no cloud, no ongoing cost. **587 tests. <1ms recall. $0/month forever.**
+Persistent, self-maintaining memory that runs locally. No API calls, no cloud, no ongoing cost. **915 tests. <1ms recall. $0/month forever.**
 
 <!-- TODO: Add demo GIF here -->
 <!-- ![SME Demo](assets/demo.gif) -->
@@ -38,6 +38,11 @@ AI agents have amnesia. Every session starts from zero. Your agent doesn't remem
 | **Transcript Ingestion** | Parses meeting recordings into tagged, searchable markdown | **60 meetings → searchable in one command.** Every decision, action item, and quote indexed. |
 | **Token Budgeting** | Retrieves only what fits in a configurable token window | **No context overflow** — relevant memories in 1,500 tokens, not 50,000 |
 | **Offline / Zero Cost** | SQLite FTS5 + local embeddings, no API calls | **$0/month forever.** No rate limits, no API keys, no vendor lock-in |
+| **Query Intent Detection** | Classifies queries as action, reasoning, temporal, or factual — applies specialized scoring per type | **"What should I focus on?" pulls action items** — not random keyword matches |
+| **Priority File Injection** | Action queries automatically surface open-loops and recent self-reviews regardless of keyword match | **Critical context never buried** — your todo list always surfaces when you ask for priorities |
+| **Rule Chunk Penalty** | Detects policy/rule content and deprioritizes it for factual queries | **"What did I buy?" returns purchases** — not your Amazon account rules |
+| **Forward-Looking Temporal** | "What's coming up in March?" searches for future events even when no files are dated in March | **Future planning works** — finds upcoming events, deadlines, and milestones |
+| **Recall Test CLI** | Built-in test harness: `npm run test:recall` scores 6 standard queries with anti-term detection | **Regression-proof** — every change validated against real recall quality |
 
 ## Before & After
 
@@ -571,7 +576,7 @@ sme restore <chunk-id>
 ## Testing
 
 ```bash
-npm test  # 15 suites, 587 tests
+npm test  # 18 suites, 915 tests
 ```
 
 ## License
