@@ -173,26 +173,30 @@ console.log('Test 14: Attribution query — various speech verbs');
 console.log('Test 15: Temporal integration — yesterday filters results');
 {
   const db = createDb();
-  const yesterday = new Date(NOW);
+  // Use real system clock so getRelevantContext (which uses real Date) matches fixtures
+  const realNow = new Date();
+  const yesterday = new Date(realNow);
   yesterday.setDate(yesterday.getDate() - 1);
-  const oldDate = new Date(NOW);
+  const yesterdayStr = yesterday.toISOString().split('T')[0];
+  const oldDate = new Date(realNow);
   oldDate.setDate(oldDate.getDate() - 30);
+  const oldDateStr = oldDate.toISOString().split('T')[0];
 
   insertChunk(db, {
-    content: 'deployed new SME version to production 2026-02-27',
-    filePath: 'memory/2026-02-27.md',
+    content: `deployed new SME version to production ${yesterdayStr}`,
+    filePath: `memory/${yesterdayStr}.md`,
     createdAt: yesterday.toISOString(),
   });
   insertChunk(db, {
     content: 'deployed infrastructure changes to production servers',
-    filePath: 'memory/2026-01-29.md',
+    filePath: `memory/${oldDateStr}.md`,
     createdAt: oldDate.toISOString(),
   });
 
   const result = getRelevantContext(db, 'what did I deploy yesterday?');
   assert(result.chunks.length > 0, `Expected chunks, got ${result.chunks.length}`);
   if (result.chunks.length > 0) {
-    assert(result.chunks[0].filePath.includes('2026-02-27'), `Expected yesterday's file ranked first, got ${result.chunks[0].filePath}`);
+    assert(result.chunks[0].filePath.includes(yesterdayStr), `Expected yesterday's file ranked first, got ${result.chunks[0].filePath}`);
   }
   db.close();
 }
@@ -451,6 +455,41 @@ console.log('Test 35: Forward-looking — deadline/schedule keywords');
   assert(r2.forwardLooking === true, 'upcoming should set forwardLooking');
   const r3 = resolveTemporalQuery('what is on my todo?', NOW);
   assert(r3.forwardLooking === true, 'todo should set forwardLooking');
+}
+
+// ─── Test 36: Future named month sets forwardLooking + forwardTerms ───
+console.log('Test 36: Future named month — forwardLooking and forwardTerms');
+{
+  // NOW = Feb 28. March is in the future.
+  const r = resolveTemporalQuery("What's coming up for me in March?", NOW);
+  assert(r.forwardLooking === true, 'future named month should set forwardLooking=true');
+  assert(Array.isArray(r.forwardTerms), 'forwardTerms should be an array');
+  assert(r.forwardTerms.includes('march'), `forwardTerms should contain 'march', got ${JSON.stringify(r.forwardTerms)}`);
+  assert(r.since.includes('2026-03-01'), `Expected since=2026-03-01, got ${r.since}`);
+}
+
+// ─── Test 37: Past named month does NOT set forwardTerms ───
+console.log('Test 37: Past named month — no forwardTerms');
+{
+  // NOW = Feb 28. January is in the past.
+  const r = resolveTemporalQuery('What happened in January?', NOW);
+  assert(r.forwardLooking === false, 'past named month should not set forwardLooking');
+  assert(r.forwardTerms.length === 0, `forwardTerms should be empty for past month, got ${JSON.stringify(r.forwardTerms)}`);
+}
+
+// ─── Test 38: "coming up" sets forwardLooking ───
+console.log('Test 38: "coming up" sets forwardLooking');
+{
+  const r = resolveTemporalQuery("What's coming up for me?", NOW);
+  assert(r.forwardLooking === true, '"coming up" should set forwardLooking=true');
+}
+
+// ─── Test 39: forwardTerms always present in return value ───
+console.log('Test 39: forwardTerms always present in return value');
+{
+  const r = resolveTemporalQuery('what happened yesterday?', NOW);
+  assert(Array.isArray(r.forwardTerms), 'forwardTerms should always be an array');
+  assert(r.forwardTerms.length === 0, 'forwardTerms should be empty for backward queries');
 }
 
 // ─── Summary ───

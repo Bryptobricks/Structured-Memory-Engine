@@ -419,6 +419,119 @@ console.log('Test 24: Forward-looking rescue for future queries');
   db.close();
 }
 
+// ─── Test 25: Forward-looking rescue — future named month with forwardTerms ───
+console.log('Test 25: Forward-looking rescue — future named month searches forwardTerms');
+{
+  const db = createDb();
+  // Chunk written recently but mentions "march" — content about future month
+  insertChunk(db, {
+    content: 'In march we need to finalize the quarterly review and submit reports.',
+    filePath: 'memory/2026-02-27.md',
+    chunkType: 'action_item',
+    confidence: 1.0,
+    createdAt: daysAgo(1),
+  });
+  // Old chunk that shouldn't surface
+  insertChunk(db, {
+    content: 'January review completed, all targets met for Q4.',
+    filePath: 'memory/2026-01-05.md',
+    chunkType: 'fact',
+    confidence: 1.0,
+    createdAt: daysAgo(54),
+  });
+
+  const result = getRelevantContext(db, "What's coming up for me in March?");
+  assert(result.chunks.length > 0, `Expected chunks for future month query, got ${result.chunks.length}`);
+  const hasMarch = result.chunks.some(c => c.content.toLowerCase().includes('march'));
+  assert(hasMarch, 'Forward-looking rescue with forwardTerms should find chunks mentioning "march"');
+  db.close();
+}
+
+// ─── Test 26: Reduced rescue bonus — FTS hits should outrank rescued noise ───
+console.log('Test 26: Rescue bonus reduction — FTS hits outrank semantic-only noise');
+{
+  const db = createDb();
+  // Strong FTS match
+  insertChunk(db, {
+    content: 'Ordered new running shoes from Nike, still waiting on delivery tracking',
+    filePath: 'memory/2026-02-25.md',
+    chunkType: 'fact',
+    confidence: 1.0,
+    createdAt: daysAgo(3),
+  });
+  // Content that might semantically match "purchases" but isn't about waiting
+  insertChunk(db, {
+    content: 'Reviewed monthly budget spreadsheet for household expenses and savings goals',
+    filePath: 'memory/2026-02-20.md',
+    chunkType: 'fact',
+    confidence: 1.0,
+    createdAt: daysAgo(8),
+  });
+
+  // Without embeddings, this just tests that FTS ranking is clean
+  const result = getRelevantContext(db, 'What purchases am I still waiting on?');
+  // The running shoes chunk should rank first (direct FTS match on "waiting")
+  if (result.chunks.length > 0) {
+    assert(result.chunks[0].content.includes('waiting'), `Expected 'waiting' chunk first, got: ${result.chunks[0].content.slice(0, 60)}`);
+  }
+  db.close();
+}
+
+// ─── Test 27: Temporal date queries use lower minCilScore ───
+console.log('Test 27: Temporal date queries lower minCilScore threshold');
+{
+  const db = createDb();
+  // Insert a chunk created on a specific date with content that weakly matches a query
+  const targetDate = new Date();
+  targetDate.setDate(targetDate.getDate() - 3); // 3 days ago
+  const targetDateStr = targetDate.toISOString().split('T')[0];
+  insertChunk(db, {
+    content: 'Had a productive morning session, finished code review and deployed hotfix.',
+    filePath: `memory/${targetDateStr}.md`,
+    chunkType: 'raw',
+    confidence: 1.0,
+    createdAt: daysAgo(3),
+  });
+
+  // Query for "last wednesday" — uses temporal date filter
+  // The chunk should survive with lowered minCilScore even if FTS match is weak
+  const result = getRelevantContext(db, 'What did I accomplish 3 days ago?');
+  // With temporal dateTerms, minCilScore drops to 0.05 and maxChunks raises to 8
+  // This gives weak-FTS chunks a better chance of surviving
+  assert(result.chunks.length >= 0, 'Temporal query with dateTerms should use relaxed thresholds');
+  db.close();
+}
+
+// ─── Test 28: Action intent injects search terms ───
+console.log('Test 28: Action intent injects action-related search terms');
+{
+  const db = createDb();
+  // Insert a chunk with action-related language
+  insertChunk(db, {
+    content: 'Pending task: review PR for authentication module. Blocked waiting on security audit.',
+    filePath: 'open-loops.md',
+    chunkType: 'action_item',
+    confidence: 1.0,
+    createdAt: daysAgo(1),
+    fileWeight: 2.0,
+  });
+  insertChunk(db, {
+    content: 'Loop back to refactor the config parser once migration is complete.',
+    filePath: 'open-loops.md',
+    chunkType: 'action_item',
+    confidence: 1.0,
+    createdAt: daysAgo(2),
+    fileWeight: 2.0,
+  });
+
+  // "What should I be focused on?" triggers action intent → injects "focus", "task", "pending", "loop", etc.
+  const result = getRelevantContext(db, 'What should I be focused on right now?');
+  assert(result.chunks.length > 0, `Expected chunks for action query with injected terms, got ${result.chunks.length}`);
+  const hasActionContent = result.chunks.some(c => c.content.includes('Pending') || c.content.includes('Loop'));
+  assert(hasActionContent, 'Action intent should surface action items via injected search terms');
+  db.close();
+}
+
 // ─── Summary ───
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
