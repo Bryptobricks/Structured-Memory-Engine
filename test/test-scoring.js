@@ -308,15 +308,53 @@ console.log('Test 13: Entity cache invalidation');
 console.log('Test 14: Weight profile constants are valid');
 {
   for (const [name, profile] of [['RECALL', RECALL_PROFILE], ['CIL', CIL_PROFILE], ['CIL_SEMANTIC', CIL_SEMANTIC_PROFILE]]) {
-    const sum = profile.fts + profile.recency + profile.type + profile.fileWeight + profile.entity + profile.semantic;
-    assert(Math.abs(sum - 1.0) < 0.001, `${name} weights should sum to 1.0, got ${sum}`);
+    const sum = profile.fts + profile.recency + profile.type + profile.entity + profile.semantic;
+    assert(Math.abs(sum - 1.0) < 0.001, `${name} additive weights should sum to 1.0, got ${sum}`);
     assert(profile.confidenceExponent > 0, `${name} confidence exponent should be > 0`);
     assert(profile.recencyHalfLifeDays > 0, `${name} recency half-life should be > 0`);
   }
 }
 
-// ─── Test 15: score() handles missing/null fields gracefully ───
-console.log('Test 15: score() handles missing/null fields');
+// ─── Test 15: score() — multiplicative file weight crushes low-tier high-FTS ───
+console.log('Test 15: score() — multiplicative file weight');
+{
+  const base = { confidence: 1.0, created_at: daysAgo(10), chunk_type: 'raw' };
+
+  // Self-review file: perfect FTS match but 0.6x file weight
+  const selfReview = { ...base, file_weight: 0.6, _normalizedFts: 1.0 };
+  // Real memory: moderate FTS but 1.0x file weight
+  const realMemory = { ...base, file_weight: 1.0, _normalizedFts: 0.5 };
+
+  const selfReviewScore = score(selfReview, nowMs, RECALL_PROFILE);
+  const realMemoryScore = score(realMemory, nowMs, RECALL_PROFILE);
+  assert(realMemoryScore > selfReviewScore,
+    `Real memory (${realMemoryScore.toFixed(3)}) should beat self-review (${selfReviewScore.toFixed(3)}) despite lower FTS`);
+
+  // Build artifact: even with perfect FTS, 0.3x should be crushed
+  const buildArtifact = { ...base, file_weight: 0.3, _normalizedFts: 1.0 };
+  const normalChunk = { ...base, file_weight: 1.0, _normalizedFts: 0.3 };
+
+  const buildScore = score(buildArtifact, nowMs, CIL_PROFILE);
+  const normalScore = score(normalChunk, nowMs, CIL_PROFILE);
+  assert(normalScore > buildScore,
+    `Normal chunk (${normalScore.toFixed(3)}) should beat build artifact (${buildScore.toFixed(3)}) despite lower FTS`);
+
+  // MEMORY.md (1.5x) gets boosted above equal-FTS default (1.0x)
+  const memoryMd = { ...base, file_weight: 1.5, _normalizedFts: 0.5 };
+  const defaultFile = { ...base, file_weight: 1.0, _normalizedFts: 0.5 };
+
+  const memoryScore = score(memoryMd, nowMs, RECALL_PROFILE);
+  const defaultScore = score(defaultFile, nowMs, RECALL_PROFILE);
+  assert(memoryScore > defaultScore,
+    `MEMORY.md (${memoryScore.toFixed(3)}) should beat default (${defaultScore.toFixed(3)}) at equal FTS`);
+
+  // Verify the gap is multiplicative, not trivial
+  const ratio = selfReviewScore / realMemoryScore;
+  assert(ratio < 0.95, `Multiplicative penalty should create meaningful gap, ratio: ${ratio.toFixed(3)}`);
+}
+
+// ─── Test 16: score() handles missing/null fields gracefully ───
+console.log('Test 16: score() handles missing/null fields');
 {
   const minimal = {}; // no fields set
   const s = score(minimal, nowMs, CIL_PROFILE);
