@@ -6,7 +6,7 @@
 npm install structured-memory-engine
 ```
 
-Persistent, self-maintaining memory that runs locally. No API calls, no cloud, no ongoing cost. **969 tests. <1ms recall. $0/month forever.**
+Persistent, self-maintaining memory that runs locally. No API calls, no cloud, no ongoing cost. **990 tests. <1ms recall. $0/month forever.**
 
 <!-- TODO: Add demo GIF here -->
 <!-- ![SME Demo](assets/demo.gif) -->
@@ -516,6 +516,10 @@ SME is built in layers. Each layer is independently useful:
 | v5 | **Context** | Auto-retrieval pipeline — the CIL engine that makes everything automatic |
 | v5.2 | **Connect** | Entity graph, conversation context, optional semantic embeddings |
 | v5.3 | **Ingest** | Transcript + CSV parsing with auto-sync pipeline |
+| v6.0-6.5 | **Scoring** | Multiplicative file weights, configurable decay, alias expansion, improved FTS normalization |
+| v6.6-6.7 | **Semantic** | Semantic embeddings wired into recall pipeline, rescue pass for FTS-invisible chunks |
+| v6.8 | **Intent** | Temporal resolution, query intent detection, rule-chunk penalty for factual queries |
+| v6.9 | **Precision** | Rescue ordering fix, always-OR FTS, self-reference penalty, percentile normalization — 5.4→9.2/10 benchmark |
 
 ## API Reference
 
@@ -576,7 +580,7 @@ sme restore <chunk-id>
 ## Testing
 
 ```bash
-npm test  # 18 suites, 969 tests
+npm test  # 18 suites, 990 tests
 ```
 
 ## License
