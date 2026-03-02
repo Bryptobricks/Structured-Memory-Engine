@@ -171,6 +171,57 @@ console.log('Test 8: Dry run reports counts without writing');
   db.close();
 }
 
+// ─── Test 9: Stop entities filtered from index ───
+console.log('Test 9: Stop entities filtered from entity graph');
+{
+  const db = createDb();
+  // "NEVER", "TODO", "TBD" should be filtered by stoplist; "Google" and "Sarah" should remain
+  insertChunk(db, { content: 'NEVER do this, TODO for later, TBD on timing', entities: JSON.stringify(['NEVER', 'TODO', 'TBD', 'Google', 'Sarah']) });
+  buildEntityIndex(db);
+
+  const never = getEntity(db, 'never');
+  assert(never === null, 'NEVER should be filtered by stoplist');
+  const todo = getEntity(db, 'todo');
+  assert(todo === null, 'TODO should be filtered by stoplist');
+  const tbd = getEntity(db, 'tbd');
+  assert(tbd === null, 'TBD should be filtered by stoplist');
+
+  const google = getEntity(db, 'google');
+  assert(google !== null, 'Google should NOT be filtered');
+  const sarah = getEntity(db, 'sarah');
+  assert(sarah !== null, 'Sarah should NOT be filtered');
+  db.close();
+}
+
+// ─── Test 10: 2-char entities preserved ───
+console.log('Test 10: 2-char entities like AI, ML preserved');
+{
+  const db = createDb();
+  insertChunk(db, { content: 'AI and ML research', entities: JSON.stringify(['AI', 'ML']) });
+  buildEntityIndex(db);
+
+  const ai = getEntity(db, 'ai');
+  assert(ai !== null, 'AI (2-char) should be preserved');
+  const ml = getEntity(db, 'ml');
+  assert(ml !== null, 'ML (2-char) should be preserved');
+  db.close();
+}
+
+// ─── Test 11: Stop entities excluded from co-occurrence ───
+console.log('Test 11: Stop entities excluded from co-occurrence tracking');
+{
+  const db = createDb();
+  insertChunk(db, { content: 'Sarah fixed the status update', entities: JSON.stringify(['Sarah', 'status', 'fixed']) });
+  buildEntityIndex(db);
+
+  const sarah = getEntity(db, 'sarah');
+  assert(sarah !== null, 'Sarah should exist in index');
+  // "status" and "fixed" are in the stoplist — they should not appear as co-entities
+  assert(!sarah.coEntities['status'], 'status should not appear as co-entity (stoplist)');
+  assert(!sarah.coEntities['fixed'], 'fixed should not appear as co-entity (stoplist)');
+  db.close();
+}
+
 // ─── Summary ───
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

@@ -494,8 +494,34 @@ console.log('Test 22: listContradictions returns unresolved');
   db.close();
 }
 
-// ─── Test 23: getLastReflectTime / setLastReflectTime ───
-console.log('Test 23: getLastReflectTime / setLastReflectTime');
+// ─── Test 23: Expanded generic headings skip contradiction detection ───
+console.log('Test 23: Expanded generic headings (Decisions, Status, etc.) skipped');
+{
+  const db = createDb();
+  // "Decisions" is now in GENERIC_HEADINGS — should NOT trigger contradiction
+  insertChunk(db, { heading: 'Decisions', content: 'decided to use PostgreSQL for the primary production database backend', filePath: 'memory/2026-01-01.md', createdAt: daysAgo(60) });
+  insertChunk(db, { heading: 'Decisions', content: 'decided not to use PostgreSQL for the primary production database backend', filePath: 'memory/2026-02-01.md', createdAt: daysAgo(10) });
+
+  const result = detectContradictions(db, { dryRun: false });
+  assert(result.newFlags === 0, `Expected 0 contradictions for generic heading "Decisions", got ${result.newFlags}`);
+  db.close();
+}
+
+// ─── Test 24: Non-generic headings still detect contradictions ───
+console.log('Test 24: Non-generic headings still detect contradictions');
+{
+  const db = createDb();
+  // "Daily Protocol" is NOT generic — should still detect contradictions
+  insertChunk(db, { heading: 'Daily Protocol', content: 'takes creatine sublingual daily morning protocol for focus energy', filePath: 'memory/2026-01-01.md', createdAt: daysAgo(60) });
+  insertChunk(db, { heading: 'Daily Protocol', content: 'stopped creatine sublingual daily morning protocol due tolerance', filePath: 'memory/2026-02-01.md', createdAt: daysAgo(10) });
+
+  const result = detectContradictions(db, { dryRun: false });
+  assert(result.newFlags === 1, `Expected 1 contradiction for non-generic heading, got ${result.newFlags}`);
+  db.close();
+}
+
+// ─── Test 25: getLastReflectTime / setLastReflectTime ───
+console.log('Test 25: getLastReflectTime / setLastReflectTime');
 {
   const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'sme-test-'));
   fs.mkdirSync(path.join(ws, '.memory'), { recursive: true });

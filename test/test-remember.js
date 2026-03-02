@@ -234,6 +234,39 @@ console.log('Test 13: Same content different days not skipped');
   fs.rmSync(ws, { recursive: true });
 }
 
+// ─── Test 14: Double-tag prevention — content already has same tag ───
+console.log('Test 14: Double-tag prevention — content already has same tag');
+{
+  _resetDedupCache();
+  const ws = tmpWorkspace();
+  const result = remember(ws, '[fact] already tagged content', { tag: 'fact', date: '2026-03-01' });
+  assert(result.line === '- [fact] already tagged content', `Expected single tag, got ${result.line}`);
+
+  const content = fs.readFileSync(result.filePath, 'utf-8');
+  assert(!content.includes('[fact] [fact]'), 'Should NOT have double [fact] [fact] tags');
+  fs.rmSync(ws, { recursive: true });
+}
+
+// ─── Test 15: Double-tag prevention — content has different tag ───
+console.log('Test 15: Double-tag prevention — content has different tag');
+{
+  _resetDedupCache();
+  const ws = tmpWorkspace();
+  const result = remember(ws, '[decision] changed plan', { tag: 'fact', date: '2026-03-01' });
+  assert(result.line === '- [fact] [decision] changed plan', `Expected fact wrapping decision, got ${result.line}`);
+  fs.rmSync(ws, { recursive: true });
+}
+
+// ─── Test 16: Double-tag prevention — tag parameter without brackets in content ───
+console.log('Test 16: Double-tag prevention — normal content gets tag prepended');
+{
+  _resetDedupCache();
+  const ws = tmpWorkspace();
+  const result = remember(ws, 'plain content', { tag: 'fact', date: '2026-03-01' });
+  assert(result.line === '- [fact] plain content', `Expected prepended tag, got ${result.line}`);
+  fs.rmSync(ws, { recursive: true });
+}
+
 // ─── Summary ───
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
