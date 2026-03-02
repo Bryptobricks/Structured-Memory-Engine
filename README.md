@@ -11,6 +11,26 @@ Persistent, self-maintaining memory that runs locally. No API calls, no cloud, n
 <!-- TODO: Add demo GIF here -->
 <!-- ![SME Demo](assets/demo.gif) -->
 
+## Quick Start (30 seconds)
+
+```bash
+# Install
+npm install -g structured-memory-engine
+
+# Initialize a workspace
+cd ~/my-project
+sme init
+
+# Query your memory
+sme query "what did we decide about the database?"
+
+# Get auto-context for AI messages
+sme context "summarize the migration plan"
+```
+
+That's it. No API keys, no config, no cloud. Everything runs locally.
+
+
 ```js
 const sme = require('structured-memory-engine').create({ workspace: '.' });
 sme.index();
@@ -150,9 +170,22 @@ Add to `~/.claude/settings.json`:
 {
   "mcpServers": {
     "sme": {
+      "command": "npx",
+      "args": ["sme-mcp"],
+      "env": { "SME_WORKSPACE": "/absolute/path/to/your/workspace" }
+    }
+  }
+}
+```
+
+Or if installed globally:
+```json
+{
+  "mcpServers": {
+    "sme": {
       "command": "node",
-      "args": ["/path/to/Structured-Memory-Engine/lib/mcp-server.js"],
-      "env": { "SME_WORKSPACE": "/path/to/workspace" }
+      "args": ["node_modules/structured-memory-engine/lib/mcp-server.js"],
+      "env": { "SME_WORKSPACE": "/absolute/path/to/your/workspace" }
     }
   }
 }

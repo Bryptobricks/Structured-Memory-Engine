@@ -23,7 +23,8 @@
     "zod": "^3.25.0"
   },
   "bin": {
-    "sme": "lib/index.js"
+    "sme": "lib/index.js",
+    "sme-mcp": "lib/mcp-server.js"
   },
   "files": [
     "lib/",
