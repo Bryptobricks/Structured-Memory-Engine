@@ -29,7 +29,12 @@ const CAPTURE_TRIGGERS = [
  */
 function stripConversationMeta(text: string): string {
   return text
+    // Multi-line code block metadata
     .replace(/Conversation info\s*\(untrusted metadata\)\s*:\s*```[\s\S]*?```\s*/gi, "")
+    // Single-line variant (when metadata gets flattened)
+    .replace(/Conversation info\s*\(untrusted metadata\)\s*:\s*\{[^}]*\}\s*/gi, "")
+    // Catch any remaining "Conversation info" prefix lines
+    .replace(/^.*Conversation info\s*\(untrusted metadata\).*$/gm, "")
     .trim();
 }
 
@@ -245,11 +250,19 @@ const memoryPlugin = {
     // --- Lifecycle hook: agent_end (auto-capture) ---
     if (autoCapture) {
       // Bug 7: Track processed message count — only evaluate NEW messages each turn
-      let _lastProcessedIndex = 0;
+      // Bug fix: Initialize to -1 so first agent_end captures only the LAST message
+      // (avoids reprocessing entire history on gateway restart)
+      let _lastProcessedIndex = -1;
 
       api.on("agent_end", async (event: any) => {
         const messages = event?.messages;
         if (!Array.isArray(messages)) return;
+
+        // On first call after init, skip all but the last message
+        // This prevents re-capturing entire history on gateway restart
+        if (_lastProcessedIndex === -1) {
+          _lastProcessedIndex = Math.max(0, messages.length - 1);
+        }
 
         // Only process messages we haven't seen yet
         const newMessages = messages.slice(_lastProcessedIndex);
