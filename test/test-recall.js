@@ -539,6 +539,89 @@ console.log('Test 18: Non-temporal query regression');
   db.close();
 }
 
+// ─── Test 19: Rescue sorts by similarity, not DB insertion order ───
+console.log('Test 19: rescue pass returns highest-similarity chunks regardless of DB order');
+{
+  const db = createDb();
+  const queryVec = new Float32Array([1.0, 0.0, 0.0]);
+
+  // Insert 15 low-similarity chunks first (earlier in DB order)
+  for (let i = 0; i < 15; i++) {
+    insertChunkWithEmbedding(db, {
+      content: `low similarity noise chunk ${i} about random topics`,
+      heading: `Noise ${i}`,
+      embedding: makeVec([0.20 + i * 0.01, 0.80 - i * 0.01, 0.0]),
+      filePath: `noise-${i}.md`,
+    });
+  }
+
+  // Insert high-similarity chunk LAST (late DB position)
+  insertChunkWithEmbedding(db, {
+    content: 'Critical high-value chunk about portfolio framework',
+    heading: 'Portfolio Framework',
+    filePath: 'MEMORY.md',
+    fileWeight: 1.5,
+    embedding: makeVec([0.95, 0.05, 0.0]),
+  });
+
+  // Query with no FTS matches — all results come from rescue pass
+  const results = recall(db, 'xyzzy', { limit: 10, queryEmbedding: queryVec });
+  const memoryChunk = results.find(r => r.filePath === 'MEMORY.md');
+  assert(memoryChunk != null, 'Rescue should find MEMORY.md despite late DB position');
+  if (memoryChunk) {
+    assert(memoryChunk.semanticSim >= 0.90, `MEMORY.md sim (${memoryChunk.semanticSim.toFixed(3)}) should be >= 0.90`);
+    // Should be #1 since it has the highest similarity
+    assert(results[0].filePath === 'MEMORY.md', `MEMORY.md should be first result, got ${results[0].filePath}`);
+  }
+  db.close();
+}
+
+// ─── Test 20: OR query runs even when AND returns results ───
+console.log('Test 20: OR query runs even when AND returns results');
+{
+  const db = createDb();
+  const recent = daysAgo(1);
+
+  // Chunk that matches AND for "portfolio allocation framework"
+  insertChunks(db, 'memory/spec.md', 1000, [
+    { heading: 'Spec', content: 'portfolio allocation framework detailed specification document', lineStart: 1, lineEnd: 5, entities: [] },
+  ], recent);
+
+  // Chunk that matches "portfolio" and "framework" but NOT "allocation" — AND misses, OR finds
+  insertChunks(db, 'MEMORY.md', 1000, [
+    { heading: 'Portfolio Framework', content: 'portfolio framework with 60% equities 30% bonds 10% alternatives', lineStart: 1, lineEnd: 5, entities: [] },
+  ], recent);
+
+  const results = recall(db, 'portfolio allocation framework', { limit: 10 });
+  assert(results.length >= 2, `Both AND and OR results should appear, got ${results.length}`);
+  const memoryHit = results.find(r => r.filePath === 'MEMORY.md');
+  assert(memoryHit != null, 'OR query should surface MEMORY.md despite partial AND match');
+  db.close();
+}
+
+// ─── Test 21: Self-reference penalty on spec/test chunks ───
+console.log('Test 21: chunks containing literal query in spec context get penalized');
+{
+  const db = createDb();
+  const recent = daysAgo(1);
+
+  insertChunks(db, 'data/sme-spec.md', 1000, [
+    { heading: 'Test Queries', content: 'test query: what supplements is JB taking? expected: MEMORY.md Current Stack in top 2 results. benchmark score target: 9/10.', lineStart: 1, lineEnd: 5, entities: [] },
+  ], recent);
+  insertChunks(db, 'memory/health.md', 1000, [
+    { heading: 'Supplements', content: 'JB current supplement stack: creatine 5g, magnesium glycinate 400mg, zinc picolinate 30mg daily', lineStart: 1, lineEnd: 5, entities: [] },
+  ], recent);
+
+  const results = recall(db, 'what supplements is JB taking', { limit: 10 });
+  assert(results.length >= 2, `Should find both chunks, got ${results.length}`);
+  const specResult = results.find(r => r.filePath === 'data/sme-spec.md');
+  const healthResult = results.find(r => r.filePath === 'memory/health.md');
+  if (specResult && healthResult) {
+    assert(healthResult.score > specResult.score, `Health chunk (${healthResult.score.toFixed(4)}) should outrank spec chunk (${specResult.score.toFixed(4)}) after self-reference penalty`);
+  }
+  db.close();
+}
+
 // ─── Summary ───
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
