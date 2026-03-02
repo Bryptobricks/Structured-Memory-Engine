@@ -423,6 +423,122 @@ console.log('Test 13: rankResults accepts profile parameter');
     `Semantic profile score (${withSemantic[0].finalScore.toFixed(4)}) should differ from recall (${withRecall[0].finalScore.toFixed(4)})`);
 }
 
+// ─── Test 14: Temporal query "yesterday" applies date filtering + file boost ───
+console.log('Test 14: Temporal "yesterday" applies date filtering and boost');
+{
+  const db = createDb();
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().split('T')[0];
+  const weekAgoStr = (() => { const d = new Date(); d.setDate(d.getDate() - 7); return d.toISOString().split('T')[0]; })();
+
+  // Insert chunks: one from yesterday's file, one from a week ago
+  insertChunks(db, `memory/${yesterdayStr}.md`, 1000, [
+    { heading: 'Log', content: 'deployed new feature to production server', lineStart: 1, lineEnd: 5, entities: [] },
+  ], yesterday.toISOString());
+  insertChunks(db, `memory/${weekAgoStr}.md`, 1000, [
+    { heading: 'Log', content: 'deployed hotfix to staging server', lineStart: 1, lineEnd: 5, entities: [] },
+  ], new Date(Date.now() - 7 * 86400000).toISOString());
+
+  const results = recall(db, 'what was deployed yesterday', { limit: 10 });
+  assert(results.length >= 1, `Temporal query should return results, got ${results.length}`);
+  // Yesterday's chunk should rank first due to temporal date boost
+  if (results.length >= 2) {
+    assert(results[0].filePath.includes(yesterdayStr), `Yesterday file should rank first, got ${results[0].filePath}`);
+  }
+  db.close();
+}
+
+// ─── Test 15: Temporal query with empty stripped query uses date-range fallback ───
+console.log('Test 15: Date-range fallback for temporal-only queries');
+{
+  const db = createDb();
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+  insertChunks(db, `memory/${yesterdayStr}.md`, 1000, [
+    { heading: 'Notes', content: 'morning standup meeting with the team about quarterly goals', lineStart: 1, lineEnd: 5, entities: [] },
+  ], yesterday.toISOString());
+  insertChunks(db, 'memory/2026-01-01.md', 1000, [
+    { heading: 'Notes', content: 'new year planning session for the team quarterly goals', lineStart: 1, lineEnd: 5, entities: [] },
+  ], '2026-01-01T12:00:00.000Z');
+
+  // "about yesterday" — "about" is a stop word, strippedQuery becomes just stop words → null
+  // This should trigger date-range fallback
+  const results = recall(db, 'about yesterday', { limit: 10 });
+  assert(results.length >= 1, `Date-range fallback should return results, got ${results.length}`);
+  if (results.length >= 1) {
+    assert(results[0].filePath.includes(yesterdayStr), `Should find yesterday's chunk, got ${results[0].filePath}`);
+  }
+  db.close();
+}
+
+// ─── Test 16: Intent type boost applies to scored results ───
+console.log('Test 16: Intent type boost for action queries');
+{
+  const db = createDb();
+  const recent = daysAgo(1);
+
+  insertChunks(db, 'memory/tasks.md', 1000, [
+    { heading: 'Tasks', content: 'action item: review pull request for auth module', lineStart: 1, lineEnd: 5, entities: [], chunkType: 'action_item' },
+    { heading: 'Notes', content: 'discussed auth module architecture in review meeting', lineStart: 6, lineEnd: 10, entities: [], chunkType: 'raw' },
+    { heading: 'Decisions', content: 'decided to use JWT for auth module token review', lineStart: 11, lineEnd: 15, entities: [], chunkType: 'decision' },
+  ], recent);
+
+  const results = recall(db, "what should I review next", { limit: 10 });
+  assert(results.length >= 1, `Intent query should return results, got ${results.length}`);
+  // action_item and decision chunks should get boosted for "what should I" queries
+  const actionIdx = results.findIndex(r => r.chunkType === 'action_item');
+  const rawIdx = results.findIndex(r => r.chunkType === 'raw');
+  if (actionIdx >= 0 && rawIdx >= 0) {
+    assert(actionIdx < rawIdx, `action_item should rank above raw after intent boost (action=${actionIdx}, raw=${rawIdx})`);
+  }
+  db.close();
+}
+
+// ─── Test 17: Rule penalty demotes rule chunks for factual queries ───
+console.log('Test 17: Rule penalty demotes rule chunks');
+{
+  const db = createDb();
+  const recent = daysAgo(1);
+
+  insertChunks(db, 'memory/rules.md', 1000, [
+    { heading: 'Rules', content: 'hard rule: never commit supplements data without approval. mandatory review required.', lineStart: 1, lineEnd: 5, entities: [] },
+  ], recent);
+  insertChunks(db, 'memory/health.md', 1000, [
+    { heading: 'Stack', content: 'supplements stack: magnesium glycinate 400mg, zinc 30mg, vitamin D 5000IU', lineStart: 1, lineEnd: 5, entities: [] },
+  ], recent);
+
+  const results = recall(db, 'supplements', { limit: 10 });
+  assert(results.length >= 2, `Should find both chunks, got ${results.length}`);
+  // The factual chunk should rank above the rule chunk after penalty
+  const ruleResult = results.find(r => r.content.includes('hard rule'));
+  const factResult = results.find(r => r.content.includes('magnesium'));
+  if (ruleResult && factResult) {
+    assert(factResult.score >= ruleResult.score, `Factual chunk (${factResult.score.toFixed(4)}) should score >= rule chunk (${ruleResult.score.toFixed(4)})`);
+  }
+  db.close();
+}
+
+// ─── Test 18: Non-temporal query unchanged (regression) ───
+console.log('Test 18: Non-temporal query regression');
+{
+  const db = createDb();
+  insertChunks(db, 'test.md', 1000, [
+    { heading: 'Protocol', content: 'magnesium glycinate supplement before bed', lineStart: 1, lineEnd: 5, entities: [] },
+    { heading: 'Stack', content: 'zinc picolinate morning routine daily', lineStart: 6, lineEnd: 10, entities: [] },
+  ], daysAgo(5));
+
+  const results = recall(db, 'magnesium', { limit: 10 });
+  assert(results.length >= 1, `Should find results, got ${results.length}`);
+  assert(results[0].content.includes('magnesium'), `First result should contain magnesium, got: ${results[0].content}`);
+  assert(typeof results[0].finalScore === 'number', 'Should have finalScore');
+  assert(typeof results[0].score === 'number', 'Should have score');
+  assert(results[0].finalScore > 0, 'Score should be positive');
+  db.close();
+}
+
 // ─── Summary ───
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
