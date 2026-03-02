@@ -63,7 +63,7 @@ console.log('Test 1: handleQuery formatting');
   insertChunk(db, { heading: 'Health', content: 'Alex takes creatine 5g daily for recovery', chunkType: 'confirmed', confidence: 1.0, filePath: 'memory/2026-02-20.md' });
   insertChunk(db, { heading: 'Stack', content: 'magnesium glycinate 400mg before bed', chunkType: 'fact', confidence: 0.9, filePath: 'MEMORY.md' });
 
-  const result = handleQuery(db, ws, { query: 'creatine' });
+  const result = await handleQuery(db, ws, { query: 'creatine' });
   assert(result.content.length === 1, `Expected 1 content block, got ${result.content.length}`);
   const text = result.content[0].text;
   assert(text.includes('memory/2026-02-20.md'), `Expected file path in output, got: ${text.slice(0, 100)}`);
@@ -81,7 +81,7 @@ console.log('Test 2: handleQuery empty results');
   const ws = tmpWorkspace();
   const db = createDb(ws);
 
-  const result = handleQuery(db, ws, { query: 'nonexistent_xyz_query' });
+  const result = await handleQuery(db, ws, { query: 'nonexistent_xyz_query' });
   const text = result.content[0].text;
   assert(text === 'No results found.', `Expected 'No results found.', got: ${text}`);
   db.close();
@@ -98,7 +98,7 @@ console.log('Test 3: handleRemember roundtrip');
   remember(ws, 'Test fact for roundtrip verification', { tag: 'confirmed', date: '2026-02-20' });
   indexWorkspace(db, ws, { force: true });
 
-  const queryResult = handleQuery(db, ws, { query: 'roundtrip verification' });
+  const queryResult = await handleQuery(db, ws, { query: 'roundtrip verification' });
   const text = queryResult.content[0].text;
   assert(text.includes('roundtrip verification'), `Expected remembered content in query results, got: ${text.slice(0, 200)}`);
   db.close();
@@ -150,7 +150,7 @@ console.log('Test 6: Error handling on bad query');
   const ws = tmpWorkspace();
   const db = createDb(ws);
 
-  const result = handleQuery(db, ws, { query: '' });
+  const result = await handleQuery(db, ws, { query: '' });
   const text = result.content[0].text;
   assert(text === 'No results found.', `Expected graceful empty for blank query, got: ${text}`);
   db.close();

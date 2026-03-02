@@ -6,7 +6,7 @@
  */
 const Database = require('better-sqlite3');
 const { SCHEMA } = require('../lib/store');
-const { score, normalizeFtsScores, RECALL_PROFILE, CIL_PROFILE, CIL_SEMANTIC_PROFILE, TYPE_BONUS } = require('../lib/scoring');
+const { score, normalizeFtsScores, RECALL_PROFILE, RECALL_SEMANTIC_PROFILE, CIL_PROFILE, CIL_SEMANTIC_PROFILE, TYPE_BONUS } = require('../lib/scoring');
 const { cilScore, budgetChunks, extractQueryTerms, invalidateEntityCache, getRelevantContext } = require('../lib/context');
 
 let passed = 0, failed = 0;
@@ -307,7 +307,7 @@ console.log('Test 13: Entity cache invalidation');
 // ─── Test 14: Weight profile constants are valid ───
 console.log('Test 14: Weight profile constants are valid');
 {
-  for (const [name, profile] of [['RECALL', RECALL_PROFILE], ['CIL', CIL_PROFILE], ['CIL_SEMANTIC', CIL_SEMANTIC_PROFILE]]) {
+  for (const [name, profile] of [['RECALL', RECALL_PROFILE], ['RECALL_SEMANTIC', RECALL_SEMANTIC_PROFILE], ['CIL', CIL_PROFILE], ['CIL_SEMANTIC', CIL_SEMANTIC_PROFILE]]) {
     const sum = profile.fts + profile.recency + profile.type + profile.entity + profile.semantic;
     assert(Math.abs(sum - 1.0) < 0.001, `${name} additive weights should sum to 1.0, got ${sum}`);
     assert(profile.confidenceExponent > 0, `${name} confidence exponent should be > 0`);
@@ -361,6 +361,26 @@ console.log('Test 16: score() handles missing/null fields');
   assert(typeof s === 'number', `Should return a number, got ${typeof s}`);
   assert(!isNaN(s), 'Should not be NaN');
   assert(s >= 0, `Score should be >= 0, got ${s}`);
+}
+
+// ─── Test 17: score() with RECALL_SEMANTIC_PROFILE boosts high-similarity chunks ───
+console.log('Test 17: RECALL_SEMANTIC_PROFILE boosts high-similarity chunks');
+{
+  const base = { confidence: 1.0, created_at: daysAgo(5), chunk_type: 'fact', file_weight: 1.0, _normalizedFts: 0.5 };
+  const highSem = { ...base, _semanticSim: 0.90 };
+  const lowSem = { ...base, _semanticSim: 0.10 };
+  const noSem = { ...base, _semanticSim: 0 };
+
+  const scoreHigh = score(highSem, nowMs, RECALL_SEMANTIC_PROFILE);
+  const scoreLow = score(lowSem, nowMs, RECALL_SEMANTIC_PROFILE);
+  const scoreNone = score(noSem, nowMs, RECALL_SEMANTIC_PROFILE);
+
+  assert(scoreHigh > scoreLow, `High semantic (${scoreHigh.toFixed(3)}) should beat low (${scoreLow.toFixed(3)}) with RECALL_SEMANTIC_PROFILE`);
+  // When semantic is 0, profile falls back to (fts+semantic)*normalizedFts — so no semantic boost
+  assert(scoreNone < scoreHigh, `No semantic (${scoreNone.toFixed(3)}) should be below high semantic (${scoreHigh.toFixed(3)})`);
+  // RECALL_SEMANTIC uses linear confidence (exponent 1.0)
+  assert(RECALL_SEMANTIC_PROFILE.confidenceExponent === 1.0, 'RECALL_SEMANTIC should use linear confidence');
+  assert(RECALL_SEMANTIC_PROFILE.recencyHalfLifeDays === 90, 'RECALL_SEMANTIC should use 90-day half-life');
 }
 
 // ─── Summary ───

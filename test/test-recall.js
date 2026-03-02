@@ -5,6 +5,8 @@
 const Database = require('better-sqlite3');
 const { SCHEMA, insertChunks } = require('../lib/store');
 const { sanitizeFtsQuery, buildOrQuery, parseSince, rankResults, recall } = require('../lib/recall');
+const { cosineSimilarity, ensureEmbeddingColumn } = require('../lib/embeddings');
+const { RECALL_PROFILE, RECALL_SEMANTIC_PROFILE } = require('../lib/scoring');
 
 let passed = 0, failed = 0;
 
@@ -247,6 +249,178 @@ console.log('Test 7: Stop word filtering in buildOrQuery');
   assert(mixed.includes('"crypto"'), 'Should contain crypto');
   assert(mixed.includes('"defi"'), 'Should expand crypto alias');
   assert(!mixed.includes('"where"'), 'Should not contain stop word "where"');
+}
+
+// ─── Embedding helpers ───
+function makeVec(values) {
+  const vec = new Float32Array(values);
+  return Buffer.from(vec.buffer);
+}
+
+function insertChunkWithEmbedding(db, { heading = null, content = 'test content', chunkType = 'raw', confidence = 1.0, createdAt = null, filePath = 'test.md', entities = '[]', fileWeight = 1.0, embedding = null, stale = 0 } = {}) {
+  ensureEmbeddingColumn(db);
+  const now = new Date().toISOString();
+  db.prepare(`INSERT INTO chunks (file_path, heading, content, line_start, line_end, entities, chunk_type, confidence, created_at, indexed_at, file_weight, access_count, last_accessed, stale, embedding)
+    VALUES (?, ?, ?, 1, 10, ?, ?, ?, ?, ?, ?, 0, NULL, ?, ?)`).run(
+    filePath, heading, content, entities, chunkType, confidence, createdAt || now, now, fileWeight, stale, embedding
+  );
+}
+
+// ─── Test 8: recall with queryEmbedding enriches results with semantic scores ───
+console.log('Test 8: recall with queryEmbedding enriches results with semantic scores');
+{
+  const db = createDb();
+  const queryVec = new Float32Array([1.0, 0.0, 0.0]);
+
+  insertChunkWithEmbedding(db, {
+    content: 'magnesium glycinate supplement protocol',
+    heading: 'Supplements',
+    embedding: makeVec([0.9, 0.1, 0.0]),
+  });
+  insertChunkWithEmbedding(db, {
+    content: 'magnesium oxide cheap alternative',
+    heading: 'Budget',
+    embedding: makeVec([0.1, 0.0, 0.9]),
+  });
+
+  const results = recall(db, 'magnesium', { limit: 10, queryEmbedding: queryVec });
+  assert(results.length >= 1, `Should find results, got ${results.length}`);
+
+  const withSem = results.filter(r => r.semanticSim != null);
+  assert(withSem.length >= 1, `At least one result should have semanticSim, got ${withSem.length}`);
+
+  // The chunk closer to queryVec [1,0,0] should have higher semanticSim
+  if (results.length >= 2) {
+    const supp = results.find(r => r.content.includes('glycinate'));
+    const budget = results.find(r => r.content.includes('oxide'));
+    if (supp && budget) {
+      assert(supp.semanticSim > budget.semanticSim, `Glycinate sim (${supp.semanticSim.toFixed(3)}) should beat oxide (${budget.semanticSim.toFixed(3)})`);
+    }
+  }
+  db.close();
+}
+
+// ─── Test 9: recall without queryEmbedding works identically (regression) ───
+console.log('Test 9: recall without queryEmbedding — no semantic scores');
+{
+  const db = createDb();
+  insertChunkWithEmbedding(db, {
+    content: 'creatine monohydrate 5g daily',
+    heading: 'Creatine',
+    embedding: makeVec([1, 0, 0]),
+  });
+
+  const results = recall(db, 'creatine', { limit: 10 });
+  assert(results.length >= 1, `Should find results, got ${results.length}`);
+  assert(results[0].semanticSim === null, `Without queryEmbedding, semanticSim should be null, got ${results[0].semanticSim}`);
+  db.close();
+}
+
+// ─── Test 10: semantic rescue finds chunks FTS missed ───
+console.log('Test 10: semantic rescue finds chunks FTS missed ("supplements" → "stack")');
+{
+  const db = createDb();
+  const queryVec = new Float32Array([0.95, 0.05, 0.0]);
+
+  // This chunk has NO keyword overlap with "supplements" — FTS won't find it
+  insertChunkWithEmbedding(db, {
+    content: 'Current Stack: creatine 5g, zinc picolinate 30mg, vitamin D3 5000IU daily',
+    heading: 'Current Stack',
+    embedding: makeVec([0.90, 0.10, 0.0]),  // high similarity to query
+  });
+
+  // This chunk DOES match "supplements" via FTS
+  insertChunkWithEmbedding(db, {
+    content: 'Ordered new supplements from Amazon last week',
+    heading: 'Shopping',
+    embedding: makeVec([0.05, 0.05, 0.90]),  // low similarity
+  });
+
+  const results = recall(db, 'supplements', { limit: 10, queryEmbedding: queryVec });
+  assert(results.length >= 2, `Should find both FTS and rescued chunks, got ${results.length}`);
+
+  const stackChunk = results.find(r => r.content.includes('Current Stack'));
+  assert(stackChunk != null, 'Semantic rescue should surface "Current Stack" chunk');
+  if (stackChunk) {
+    assert(stackChunk.semanticSim >= 0.30, `Rescued chunk sim (${stackChunk.semanticSim.toFixed(3)}) should be >= 0.30`);
+  }
+  db.close();
+}
+
+// ─── Test 11: rescue respects stale/exclude filters ───
+console.log('Test 11: rescue respects stale/exclude filters');
+{
+  const db = createDb();
+  const queryVec = new Float32Array([1.0, 0.0, 0.0]);
+
+  // Stale chunk with high similarity — should be excluded by default
+  insertChunkWithEmbedding(db, {
+    content: 'old outdated stack info from 2024',
+    heading: 'Old Stack',
+    embedding: makeVec([0.95, 0.05, 0.0]),
+    stale: 1,
+  });
+
+  // Active chunk with moderate similarity
+  insertChunkWithEmbedding(db, {
+    content: 'current active protocol for daily routine',
+    heading: 'Active',
+    embedding: makeVec([0.60, 0.40, 0.0]),
+  });
+
+  const results = recall(db, 'daily routine info', { limit: 10, queryEmbedding: queryVec });
+  const staleHit = results.find(r => r.content.includes('outdated'));
+  assert(!staleHit, 'Rescued chunks should respect stale exclusion');
+
+  // With includeStale, the stale chunk should appear
+  const withStale = recall(db, 'daily routine info', { limit: 10, queryEmbedding: queryVec, includeStale: true });
+  const staleFound = withStale.find(r => r.content.includes('outdated'));
+  assert(staleFound != null, 'Rescued stale chunk should appear when includeStale=true');
+  db.close();
+}
+
+// ─── Test 12: pure-semantic fallback when all stop words ───
+console.log('Test 12: pure-semantic fallback when FTS query is all stop words');
+{
+  const db = createDb();
+  const queryVec = new Float32Array([1.0, 0.0, 0.0]);
+
+  insertChunkWithEmbedding(db, {
+    content: 'important decision about project architecture',
+    heading: 'Architecture',
+    embedding: makeVec([0.85, 0.15, 0.0]),
+  });
+
+  // "is the" sanitizes to null (all stop words removed by FTS sanitizer)
+  // But with queryEmbedding, rescue should still find relevant chunks
+  const results = recall(db, 'is the', { limit: 10, queryEmbedding: queryVec });
+  assert(results.length >= 1, `Pure-semantic fallback should find results, got ${results.length}`);
+
+  // Without embedding, this returns empty (no FTS terms)
+  const noEmb = recall(db, 'is the', { limit: 10 });
+  assert(noEmb.length === 0, `Without embedding, stop-word query should return empty, got ${noEmb.length}`);
+  db.close();
+}
+
+// ─── Test 13: rankResults accepts profile parameter ───
+console.log('Test 13: rankResults accepts profile parameter');
+{
+  const now = new Date().toISOString();
+  const rows = [
+    { rank: -10, file_weight: 1.0, confidence: 1.0, created_at: now, content: 'test', heading: 'A', file_path: 'a.md', line_start: 1, line_end: 5, chunk_type: 'fact', entities: '[]', _semanticSim: 0.9 },
+  ];
+
+  const withDefault = rankResults([...rows]);
+  const withRecall = rankResults([...rows], RECALL_PROFILE);
+  const withSemantic = rankResults([...rows].map(r => ({ ...r })), RECALL_SEMANTIC_PROFILE);
+
+  assert(withDefault.length === 1, 'Default profile should work');
+  assert(withRecall.length === 1, 'Explicit RECALL_PROFILE should work');
+  assert(withSemantic.length === 1, 'RECALL_SEMANTIC_PROFILE should work');
+
+  // Semantic profile should produce a different score since it weights semantic at 0.30
+  assert(withSemantic[0].finalScore !== withRecall[0].finalScore,
+    `Semantic profile score (${withSemantic[0].finalScore.toFixed(4)}) should differ from recall (${withRecall[0].finalScore.toFixed(4)})`);
 }
 
 // ─── Summary ───
