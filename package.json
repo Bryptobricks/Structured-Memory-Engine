@@ -1,6 +1,6 @@
 {
   "name": "structured-memory-engine",
-  "version": "6.10.2",
+  "version": "7.0.0",
   "description": "Persistent, self-maintaining memory for AI agents. Local SQLite FTS5, zero API calls, <1ms recall.",
   "main": "lib/api.js",
   "exports": {
