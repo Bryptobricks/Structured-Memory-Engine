@@ -492,6 +492,89 @@ console.log('Test 39: forwardTerms always present in return value');
   assert(r.forwardTerms.length === 0, 'forwardTerms should be empty for backward queries');
 }
 
+// ─── Test 40: Specific date — full month + day + year ───
+console.log('Test 40: Specific date — February 23 2026');
+{
+  const r = resolveTemporalQuery('February 23 2026', NOW);
+  assert(r.dateTerms.includes('2026-02-23'), `Expected 2026-02-23 in dateTerms, got ${JSON.stringify(r.dateTerms)}`);
+  assert(r.since === '2026-02-23T00:00:00.000Z', `Expected since=2026-02-23, got ${r.since}`);
+  assert(r.until === '2026-02-24T00:00:00.000Z', `Expected until=2026-02-24, got ${r.until}`);
+}
+
+// ─── Test 41: Specific date — month + day, no year (defaults to current) ───
+console.log('Test 41: Specific date — February 23 (no year)');
+{
+  const r = resolveTemporalQuery('February 23', NOW);
+  assert(r.dateTerms.includes('2026-02-23'), `Expected 2026-02-23 in dateTerms, got ${JSON.stringify(r.dateTerms)}`);
+}
+
+// ─── Test 42: Specific date — abbreviated month ───
+console.log('Test 42: Specific date — Feb 23 2026');
+{
+  const r = resolveTemporalQuery('Feb 23 2026', NOW);
+  assert(r.dateTerms.includes('2026-02-23'), `Expected 2026-02-23 in dateTerms, got ${JSON.stringify(r.dateTerms)}`);
+}
+
+// ─── Test 43: Specific date — ordinal suffix ───
+console.log('Test 43: Specific date — February 23rd 2026');
+{
+  const r = resolveTemporalQuery('February 23rd 2026', NOW);
+  assert(r.dateTerms.includes('2026-02-23'), `Expected 2026-02-23 in dateTerms, got ${JSON.stringify(r.dateTerms)}`);
+}
+
+// ─── Test 44: Specific date — March 1st no year ───
+console.log('Test 44: Specific date — March 1st (no year)');
+{
+  const r = resolveTemporalQuery('March 1st', NOW);
+  assert(r.dateTerms.includes('2026-03-01'), `Expected 2026-03-01 in dateTerms, got ${JSON.stringify(r.dateTerms)}`);
+}
+
+// ─── Test 45: Specific date — "on" prefix ───
+console.log('Test 45: Specific date — on February 23 2026');
+{
+  const r = resolveTemporalQuery('on February 23 2026', NOW);
+  assert(r.dateTerms.includes('2026-02-23'), `Expected 2026-02-23 in dateTerms, got ${JSON.stringify(r.dateTerms)}`);
+}
+
+// ─── Test 46: Specific date — natural language wrapper ───
+console.log('Test 46: Specific date — What happened on February 23?');
+{
+  const r = resolveTemporalQuery('What happened on February 23?', NOW);
+  assert(r.dateTerms.length > 0, `Expected dateTerms, got ${JSON.stringify(r.dateTerms)}`);
+  assert(r.strippedQuery.includes('What happened'), `Content should survive stripping, got "${r.strippedQuery}"`);
+}
+
+// ─── Test 47: ISO date parsing ───
+console.log('Test 47: ISO date — 2026-02-23');
+{
+  const r = resolveTemporalQuery('2026-02-23', NOW);
+  assert(r.dateTerms.includes('2026-02-23'), `Expected 2026-02-23 in dateTerms, got ${JSON.stringify(r.dateTerms)}`);
+  assert(r.since === '2026-02-23T00:00:00.000Z', `Expected since=2026-02-23, got ${r.since}`);
+  assert(r.until === '2026-02-24T00:00:00.000Z', `Expected until=2026-02-24, got ${r.until}`);
+}
+
+// ─── Test 48: "in February" still works (month-only, no day) ───
+console.log('Test 48: "in February" still works as month-only');
+{
+  const r = resolveTemporalQuery('in February', NOW);
+  assert(r.since !== null && r.until !== null, 'Should set since/until for month range');
+  assert(r.dateTerms.length === 0, `Month-only should not add dateTerms, got ${JSON.stringify(r.dateTerms)}`);
+}
+
+// ─── Test 49: "February 2026" without day should NOT match specific-date pattern ───
+console.log('Test 49: "February 2026" without day does not produce bad date');
+{
+  const r = resolveTemporalQuery('February 2026', NOW);
+  // Should NOT set since to a NaN date or invalid date
+  if (r.since) {
+    assert(!r.since.includes('NaN'), 'Should not produce NaN date');
+  }
+  // Should not have dateTerms with invalid entries
+  for (const dt of r.dateTerms) {
+    assert(!dt.includes('NaN'), `dateTerms should not contain NaN, got ${dt}`);
+  }
+}
+
 // ─── Summary ───
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
