@@ -88,14 +88,16 @@ const memoryPlugin = {
     const sme = require("structured-memory-engine");
     const engine = sme.create({ workspace });
 
-    // Auto-index on startup
+    // Auto-index on startup (engine.index() is async in SME v7+)
     if (autoIndex) {
-      try {
-        const result = engine.index();
-        api.logger?.info?.(`memory-sme: indexed ${result.indexed} files (${result.total} total)`);
-      } catch (err: any) {
-        api.logger?.warn?.(`memory-sme: index failed: ${String(err)}`);
-      }
+      (async () => {
+        try {
+          const result = await engine.index();
+          api.logger?.info?.(`memory-sme: indexed ${result.indexed ?? '?'} files (${result.total ?? '?'} total)`);
+        } catch (err: any) {
+          api.logger?.warn?.(`memory-sme: index failed: ${String(err)}`);
+        }
+      })();
     }
 
     api.logger?.info?.(`memory-sme: plugin registered (workspace: ${workspace}, autoRecall: ${autoRecall}, autoCapture: ${autoCapture})`);
