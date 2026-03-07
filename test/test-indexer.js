@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { SCHEMA, insertChunks } = require('../lib/store');
-const { extractEntities, chunkMarkdown, discoverFiles, indexWorkspace } = require('../lib/indexer');
+const { extractEntities, chunkMarkdown, discoverFiles, indexWorkspace, classifyChunk } = require('../lib/indexer');
 
 let passed = 0, failed = 0;
 
@@ -413,6 +413,107 @@ console.log('Test 20: Small content not affected by speaker-turn splitting');
   const small = '# Meeting\nAlice: Hello\nBob: Hi there\nAlice: Let\'s discuss the agenda';
   const chunks = chunkMarkdown(small);
   assert(chunks.length === 1, `Small content should stay as 1 chunk, got ${chunks.length}`);
+}
+
+// ─── Test 21: indexWorkspace — excludePatterns skips matching files ───
+console.log('Test 21: indexWorkspace — excludePatterns skips matching files');
+{
+  const dir = makeTempDir();
+  try {
+    fs.writeFileSync(path.join(dir, 'MEMORY.md'), '# Memory\n\nImportant facts here.\n');
+    fs.writeFileSync(path.join(dir, 'USER.md'), '# User\n\nUser info here.\n');
+    fs.mkdirSync(path.join(dir, 'memory'));
+    fs.writeFileSync(path.join(dir, 'memory', 'old-spec.md'), '# Old Spec\n\nObsolete spec content.\n');
+
+    const db = createDb();
+
+    // Index with exclusion pattern
+    const r = indexWorkspace(db, dir, { force: true, excludePatterns: ['memory/old-spec.md'] });
+    assert(r.excluded === 1, `Should exclude 1 file, got ${r.excluded}`);
+    assert(r.indexed === 2, `Should index 2 files, got ${r.indexed}`);
+
+    // Verify excluded file has no chunks
+    const excludedChunks = db.prepare("SELECT COUNT(*) as n FROM chunks WHERE file_path = 'memory/old-spec.md'").get().n;
+    assert(excludedChunks === 0, `Excluded file should have 0 chunks, got ${excludedChunks}`);
+
+    // Verify non-excluded files are indexed
+    const memChunks = db.prepare("SELECT COUNT(*) as n FROM chunks WHERE file_path = 'MEMORY.md'").get().n;
+    assert(memChunks > 0, `MEMORY.md should have chunks, got ${memChunks}`);
+
+    db.close();
+  } finally {
+    cleanup(dir);
+  }
+}
+
+// ─── Test 22: indexWorkspace — glob excludePatterns ───
+console.log('Test 22: indexWorkspace — glob excludePatterns');
+{
+  const dir = makeTempDir();
+  try {
+    fs.writeFileSync(path.join(dir, 'MEMORY.md'), '# Memory\n\nFacts here.\n');
+    fs.mkdirSync(path.join(dir, 'memory'));
+    fs.writeFileSync(path.join(dir, 'memory', 'sme-spec-v1.md'), '# Spec V1\n\nOld spec.\n');
+    fs.writeFileSync(path.join(dir, 'memory', 'sme-spec-v2.md'), '# Spec V2\n\nOlder spec.\n');
+    fs.writeFileSync(path.join(dir, 'memory', '2026-01-01.md'), '# Daily\n\nKeep this.\n');
+
+    const db = createDb();
+    const r = indexWorkspace(db, dir, { force: true, excludePatterns: ['memory/sme-*.md'] });
+    assert(r.excluded === 2, `Should exclude 2 sme-* files, got ${r.excluded}`);
+
+    const smeChunks = db.prepare("SELECT COUNT(*) as n FROM chunks WHERE file_path LIKE 'memory/sme-%'").get().n;
+    assert(smeChunks === 0, `sme-* files should have 0 chunks, got ${smeChunks}`);
+
+    const dailyChunks = db.prepare("SELECT COUNT(*) as n FROM chunks WHERE file_path = 'memory/2026-01-01.md'").get().n;
+    assert(dailyChunks > 0, `Daily file should still be indexed, got ${dailyChunks}`);
+
+    db.close();
+  } finally {
+    cleanup(dir);
+  }
+}
+
+// ─── Test 23: classifyChunk — explicit tags ───
+console.log('Test 23: classifyChunk — explicit tags');
+{
+  assert(classifyChunk('[fact] The sky is blue') === 'fact', 'Should classify [fact]');
+  assert(classifyChunk('[decision] Use React for frontend') === 'decision', 'Should classify [decision]');
+  assert(classifyChunk('[confirmed] Water is wet') === 'confirmed', 'Should classify [confirmed]');
+  assert(classifyChunk('[preference] Dark mode always') === 'preference', 'Should classify [preference]');
+  assert(classifyChunk('[pref] Monospace fonts') === 'preference', 'Should classify [pref] as preference');
+  assert(classifyChunk('[opinion] React is better') === 'opinion', 'Should classify [opinion]');
+  assert(classifyChunk('[inferred] Probably likes coffee') === 'inferred', 'Should classify [inferred]');
+  assert(classifyChunk('[action_item] Fix the bug') === 'action_item', 'Should classify [action_item]');
+  assert(classifyChunk('[system] Internal config') === 'fact', 'Should classify [system] as fact');
+  assert(classifyChunk('No tags here, just plain text') === null, 'No tags should return null');
+  assert(classifyChunk('Decided to use Postgres for the DB') === null, 'Content heuristics should NOT match');
+}
+
+// ─── Test 24: Auto-classify during indexing ───
+console.log('Test 24: Auto-classify during indexing');
+{
+  const dir = makeTempDir();
+  try {
+    // File with explicit tags but no fileTypeDefaults
+    fs.writeFileSync(path.join(dir, 'MEMORY.md'),
+      '# Notes\n\n[fact] TypeScript is used for the frontend\n\n# Choices\n\n[decision] Switched to Bun for package management\n\n# Plain\n\nJust some text without any tags\n');
+
+    const db = createDb();
+    indexWorkspace(db, dir, { force: true });
+
+    const factChunks = db.prepare("SELECT * FROM chunks WHERE chunk_type = 'fact'").all();
+    assert(factChunks.length >= 1, `Should have fact-typed chunk, got ${factChunks.length}`);
+
+    const decisionChunks = db.prepare("SELECT * FROM chunks WHERE chunk_type = 'decision'").all();
+    assert(decisionChunks.length >= 1, `Should have decision-typed chunk, got ${decisionChunks.length}`);
+
+    const rawChunks = db.prepare("SELECT * FROM chunks WHERE chunk_type = 'raw'").all();
+    assert(rawChunks.length >= 1, `Plain text should remain raw, got ${rawChunks.length}`);
+
+    db.close();
+  } finally {
+    cleanup(dir);
+  }
 }
 
 // ─── Summary ───

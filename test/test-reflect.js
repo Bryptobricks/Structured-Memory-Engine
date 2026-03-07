@@ -539,6 +539,43 @@ console.log('Test 25: getLastReflectTime / setLastReflectTime');
   fs.rmSync(ws, { recursive: true });
 }
 
+// ─── Test: Decay actually changes confidence for old non-confirmed chunks ───
+console.log('Test: Decay changes confidence on old chunks');
+{
+  const db = createDb();
+  // Insert a 200-day-old raw chunk with confidence 1.0
+  insertChunk(db, { chunkType: 'raw', confidence: 1.0, createdAt: daysAgo(200) });
+  // Insert a confirmed chunk (should NOT decay)
+  insertChunk(db, { chunkType: 'confirmed', confidence: 1.0, createdAt: daysAgo(200) });
+
+  const result = decayConfidence(db, { config: { reflect: { halfLifeDays: 365, decayRate: 1.0 } } });
+  assert(result.decayed >= 1, `Should decay at least 1 chunk, got ${result.decayed}`);
+
+  const raw = db.prepare("SELECT confidence FROM chunks WHERE chunk_type = 'raw'").get();
+  assert(raw.confidence < 1.0, `Raw chunk confidence should drop below 1.0, got ${raw.confidence}`);
+
+  const confirmed = db.prepare("SELECT confidence FROM chunks WHERE chunk_type = 'confirmed'").get();
+  assert(confirmed.confidence === 1.0, `Confirmed chunk should not decay, got ${confirmed.confidence}`);
+
+  db.close();
+}
+
+// ─── Test: getLastReflectTime returns 0 for fresh workspace ───
+console.log('Test: getLastReflectTime — fresh workspace returns 0');
+{
+  const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'sme-reflect-'));
+  fs.mkdirSync(path.join(ws, '.memory'), { recursive: true });
+  const t = getLastReflectTime(ws);
+  assert(t === 0, `Fresh workspace should return 0, got ${t}`);
+
+  setLastReflectTime(ws);
+  const t2 = getLastReflectTime(ws);
+  assert(t2 > 0, `After set, should return positive timestamp, got ${t2}`);
+  assert(Date.now() - t2 < 5000, `Timestamp should be recent, got ${Date.now() - t2}ms ago`);
+
+  fs.rmSync(ws, { recursive: true });
+}
+
 // ─── Summary ───
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
