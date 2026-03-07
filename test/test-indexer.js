@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { SCHEMA, insertChunks } = require('../lib/store');
-const { extractEntities, chunkMarkdown, discoverFiles, indexWorkspace } = require('../lib/indexer');
+const { extractEntities, chunkMarkdown, discoverFiles, indexWorkspace, classifyChunk } = require('../lib/indexer');
 
 let passed = 0, failed = 0;
 
@@ -466,6 +466,49 @@ console.log('Test 22: indexWorkspace — glob excludePatterns');
 
     const dailyChunks = db.prepare("SELECT COUNT(*) as n FROM chunks WHERE file_path = 'memory/2026-01-01.md'").get().n;
     assert(dailyChunks > 0, `Daily file should still be indexed, got ${dailyChunks}`);
+
+    db.close();
+  } finally {
+    cleanup(dir);
+  }
+}
+
+// ─── Test 23: classifyChunk — explicit tags ───
+console.log('Test 23: classifyChunk — explicit tags');
+{
+  assert(classifyChunk('[fact] The sky is blue') === 'fact', 'Should classify [fact]');
+  assert(classifyChunk('[decision] Use React for frontend') === 'decision', 'Should classify [decision]');
+  assert(classifyChunk('[confirmed] Water is wet') === 'confirmed', 'Should classify [confirmed]');
+  assert(classifyChunk('[preference] Dark mode always') === 'preference', 'Should classify [preference]');
+  assert(classifyChunk('[pref] Monospace fonts') === 'preference', 'Should classify [pref] as preference');
+  assert(classifyChunk('[opinion] React is better') === 'opinion', 'Should classify [opinion]');
+  assert(classifyChunk('[inferred] Probably likes coffee') === 'inferred', 'Should classify [inferred]');
+  assert(classifyChunk('[action_item] Fix the bug') === 'action_item', 'Should classify [action_item]');
+  assert(classifyChunk('[system] Internal config') === 'fact', 'Should classify [system] as fact');
+  assert(classifyChunk('No tags here, just plain text') === null, 'No tags should return null');
+  assert(classifyChunk('Decided to use Postgres for the DB') === null, 'Content heuristics should NOT match');
+}
+
+// ─── Test 24: Auto-classify during indexing ───
+console.log('Test 24: Auto-classify during indexing');
+{
+  const dir = makeTempDir();
+  try {
+    // File with explicit tags but no fileTypeDefaults
+    fs.writeFileSync(path.join(dir, 'MEMORY.md'),
+      '# Notes\n\n[fact] TypeScript is used for the frontend\n\n# Choices\n\n[decision] Switched to Bun for package management\n\n# Plain\n\nJust some text without any tags\n');
+
+    const db = createDb();
+    indexWorkspace(db, dir, { force: true });
+
+    const factChunks = db.prepare("SELECT * FROM chunks WHERE chunk_type = 'fact'").all();
+    assert(factChunks.length >= 1, `Should have fact-typed chunk, got ${factChunks.length}`);
+
+    const decisionChunks = db.prepare("SELECT * FROM chunks WHERE chunk_type = 'decision'").all();
+    assert(decisionChunks.length >= 1, `Should have decision-typed chunk, got ${decisionChunks.length}`);
+
+    const rawChunks = db.prepare("SELECT * FROM chunks WHERE chunk_type = 'raw'").all();
+    assert(rawChunks.length >= 1, `Plain text should remain raw, got ${rawChunks.length}`);
 
     db.close();
   } finally {
