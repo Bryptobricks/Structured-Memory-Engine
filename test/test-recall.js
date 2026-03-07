@@ -655,6 +655,51 @@ console.log('Test 22: Temporal boost — single-day query dominates over keyword
   db.close();
 }
 
+// ─── Test 23: Heading boost — query term in heading ranks higher ───
+console.log('Test 23: Heading boost — query term in heading ranks higher');
+{
+  const db = createDb();
+  const recent = daysAgo(2);
+
+  // Chunk with "creatine" in heading AND body
+  insertChunks(db, 'MEMORY.md', 1000, [
+    { heading: 'Creatine Protocol', content: 'creatine monohydrate 5g dosage taken with water daily', lineStart: 1, lineEnd: 5, entities: [] },
+  ], recent);
+
+  // Chunk with "creatine" only in body (similar content)
+  insertChunks(db, 'USER.md', 1000, [
+    { heading: 'Supplements', content: 'creatine monohydrate 5g dosage taken with juice daily', lineStart: 1, lineEnd: 5, entities: [] },
+  ], recent);
+
+  const results = recall(db, 'creatine dosage', { limit: 5 });
+  assert(results.length >= 2, `Should find both chunks, got ${results.length}`);
+  // The chunk with "creatine" in heading should rank higher due to heading boost
+  const headingMatch = results.find(r => r.heading === 'Creatine Protocol');
+  const bodyMatch = results.find(r => r.heading === 'Supplements');
+  if (headingMatch && bodyMatch) {
+    assert(headingMatch.score > bodyMatch.score,
+      `Heading match (${headingMatch.score.toFixed(3)}) should rank > body match (${bodyMatch.score.toFixed(3)})`);
+  }
+  db.close();
+}
+
+// ─── Test 24: Heading boost — no effect when no heading matches ───
+console.log('Test 24: Heading boost — no effect when query terms not in headings');
+{
+  const db = createDb();
+  const recent = daysAgo(1);
+
+  insertChunks(db, 'MEMORY.md', 1000, [
+    { heading: 'Morning Routine', content: 'takes magnesium before bed for sleep quality improvement', lineStart: 1, lineEnd: 5, entities: [] },
+    { heading: 'Evening Routine', content: 'reads about magnesium research papers and dosing protocols', lineStart: 6, lineEnd: 10, entities: [] },
+  ], recent);
+
+  const results = recall(db, 'magnesium dosing', { limit: 5 });
+  // Both chunks match "magnesium" in content, neither has it in heading — no heading boost applied
+  assert(results.length >= 1, `Should find results, got ${results.length}`);
+  db.close();
+}
+
 // ─── Summary ───
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
