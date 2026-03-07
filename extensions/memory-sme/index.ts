@@ -98,6 +98,23 @@ const memoryPlugin = {
       }
     }
 
+    // Auto-reflect on startup (once per day max, unless disabled via config)
+    try {
+      const { loadConfig } = require("structured-memory-engine/lib/config");
+      const smeConfig = loadConfig(workspace);
+      const autoReflect = smeConfig?.reflect?.autoReflect !== false;
+      if (!autoReflect) throw new Error("disabled by config");
+      const { getLastReflectTime } = require("structured-memory-engine/lib/reflect");
+      const lastReflect = getLastReflectTime(workspace);
+      const hoursSince = (Date.now() - lastReflect) / (1000 * 60 * 60);
+      if (hoursSince >= 24) {
+        const result = await engine.reflect();
+        api.logger?.info?.(`memory-sme: auto-reflect complete (decay: ${result.decay?.decayed ?? 0}, stale: ${result.stale?.marked ?? 0})`);
+      }
+    } catch (err: any) {
+      api.logger?.debug?.(`memory-sme: auto-reflect skipped: ${String(err)}`);
+    }
+
     api.logger?.info?.(`memory-sme: plugin registered (workspace: ${workspace}, autoRecall: ${autoRecall}, autoCapture: ${autoCapture})`);
 
     // --- Tool: memory_search ---
