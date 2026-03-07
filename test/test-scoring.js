@@ -6,7 +6,7 @@
  */
 const Database = require('better-sqlite3');
 const { SCHEMA } = require('../lib/store');
-const { score, normalizeFtsScores, RECALL_PROFILE, RECALL_SEMANTIC_PROFILE, CIL_PROFILE, CIL_SEMANTIC_PROFILE, TYPE_BONUS } = require('../lib/scoring');
+const { score, normalizeFtsScores, RECALL_PROFILE, RECALL_SEMANTIC_PROFILE, CIL_PROFILE, CIL_SEMANTIC_PROFILE, ASSISTANT_PROFILE, ASSISTANT_SEMANTIC_PROFILE, TYPE_BONUS, resolveProfile } = require('../lib/scoring');
 const { cilScore, budgetChunks, extractQueryTerms, invalidateEntityCache, getRelevantContext } = require('../lib/context');
 
 let passed = 0, failed = 0;
@@ -307,7 +307,7 @@ console.log('Test 13: Entity cache invalidation');
 // ─── Test 14: Weight profile constants are valid ───
 console.log('Test 14: Weight profile constants are valid');
 {
-  for (const [name, profile] of [['RECALL', RECALL_PROFILE], ['RECALL_SEMANTIC', RECALL_SEMANTIC_PROFILE], ['CIL', CIL_PROFILE], ['CIL_SEMANTIC', CIL_SEMANTIC_PROFILE]]) {
+  for (const [name, profile] of [['RECALL', RECALL_PROFILE], ['RECALL_SEMANTIC', RECALL_SEMANTIC_PROFILE], ['CIL', CIL_PROFILE], ['CIL_SEMANTIC', CIL_SEMANTIC_PROFILE], ['ASSISTANT', ASSISTANT_PROFILE], ['ASSISTANT_SEMANTIC', ASSISTANT_SEMANTIC_PROFILE]]) {
     const sum = profile.fts + profile.recency + profile.type + profile.entity + profile.semantic;
     assert(Math.abs(sum - 1.0) < 0.001, `${name} additive weights should sum to 1.0, got ${sum}`);
     assert(profile.confidenceExponent > 0, `${name} confidence exponent should be > 0`);
@@ -381,6 +381,44 @@ console.log('Test 17: RECALL_SEMANTIC_PROFILE boosts high-similarity chunks');
   // RECALL_SEMANTIC uses linear confidence (exponent 1.0)
   assert(RECALL_SEMANTIC_PROFILE.confidenceExponent === 1.0, 'RECALL_SEMANTIC should use linear confidence');
   assert(RECALL_SEMANTIC_PROFILE.recencyHalfLifeDays === 90, 'RECALL_SEMANTIC should use 90-day half-life');
+}
+
+// ─── Test 18: ASSISTANT_PROFILE — recent fact outranks old raw ───
+console.log('Test 18: ASSISTANT_PROFILE — recent fact outranks old raw');
+{
+  const recentFact = { confidence: 1.0, created_at: daysAgo(3), chunk_type: 'fact', file_weight: 1.0, _normalizedFts: 0.5 };
+  const oldRaw = { confidence: 1.0, created_at: daysAgo(60), chunk_type: 'raw', file_weight: 1.0, _normalizedFts: 0.7 };
+
+  const scoreRecent = score(recentFact, nowMs, ASSISTANT_PROFILE);
+  const scoreOld = score(oldRaw, nowMs, ASSISTANT_PROFILE);
+  assert(scoreRecent > scoreOld,
+    `Recent fact (${scoreRecent.toFixed(3)}) should beat old raw (${scoreOld.toFixed(3)}) with assistant profile`);
+}
+
+// ─── Test 19: ASSISTANT_PROFILE — 7-day-old significantly outranks 60-day-old ───
+console.log('Test 19: ASSISTANT_PROFILE — recency half-life 30 days');
+{
+  const base = { confidence: 1.0, chunk_type: 'fact', file_weight: 1.0, _normalizedFts: 0.5 };
+  const week = { ...base, created_at: daysAgo(7) };
+  const twoMonths = { ...base, created_at: daysAgo(60) };
+
+  const scoreWeek = score(week, nowMs, ASSISTANT_PROFILE);
+  const scoreTwoMonths = score(twoMonths, nowMs, ASSISTANT_PROFILE);
+  const ratio = scoreTwoMonths / scoreWeek;
+  // Recency is 30% of score, so 60-day gap creates meaningful but not total difference
+  assert(ratio < 0.8, `60-day chunk should score meaningfully lower than 7-day chunk, ratio: ${ratio.toFixed(3)}`);
+}
+
+// ─── Test 20: resolveProfile — returns correct profiles ───
+console.log('Test 20: resolveProfile — returns correct profiles');
+{
+  assert(resolveProfile('default') === RECALL_PROFILE, 'default should resolve to RECALL_PROFILE');
+  assert(resolveProfile('default', true) === RECALL_SEMANTIC_PROFILE, 'default+semantic should resolve to RECALL_SEMANTIC_PROFILE');
+  assert(resolveProfile('assistant') === ASSISTANT_PROFILE, 'assistant should resolve to ASSISTANT_PROFILE');
+  assert(resolveProfile('assistant', true) === ASSISTANT_SEMANTIC_PROFILE, 'assistant+semantic should resolve to ASSISTANT_SEMANTIC_PROFILE');
+  assert(resolveProfile('cil') === CIL_PROFILE, 'cil should resolve to CIL_PROFILE');
+  assert(resolveProfile('unknown') === RECALL_PROFILE, 'unknown should fallback to RECALL_PROFILE');
+  assert(resolveProfile('unknown', true) === RECALL_SEMANTIC_PROFILE, 'unknown+semantic should fallback to RECALL_SEMANTIC_PROFILE');
 }
 
 // ─── Summary ───
