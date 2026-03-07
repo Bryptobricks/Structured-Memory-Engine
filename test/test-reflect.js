@@ -434,14 +434,14 @@ console.log('Test 19: resolveContradiction keep-both');
 console.log('Test 20: Configurable decay rate');
 {
   const db = createDb();
-  insertChunk(db, { chunkType: 'inferred', confidence: 0.7, createdAt: daysAgo(200) });
+  insertChunk(db, { chunkType: 'inferred', confidence: 0.7, createdAt: daysAgo(30) });
 
-  // Default decay
+  // Default decay (halfLife=120)
   const defaultResult = decayConfidence(db, { dryRun: true });
   const defaultDecay = defaultResult.details[0] ? (0.7 - defaultResult.details[0].newConf) : 0;
 
-  // Faster decay: 2x rate, 180-day half-life
-  const fastConfig = { reflect: { decayRate: 2.0, halfLifeDays: 180 } };
+  // Faster decay: 2x rate, 60-day half-life
+  const fastConfig = { reflect: { decayRate: 2.0, halfLifeDays: 60 } };
   const fastResult = decayConfidence(db, { dryRun: true, config: fastConfig });
   const fastDecay = fastResult.details[0] ? (0.7 - fastResult.details[0].newConf) : 0;
 
@@ -574,6 +574,61 @@ console.log('Test: getLastReflectTime — fresh workspace returns 0');
   assert(Date.now() - t2 < 5000, `Timestamp should be recent, got ${Date.now() - t2}ms ago`);
 
   fs.rmSync(ws, { recursive: true });
+}
+
+// ─── Test: Per-type decay rates ───
+console.log('Test: Per-type decay rates — raw decays faster than decision');
+{
+  const db = createDb();
+  // Both 150 days old, both start at confidence 1.0
+  insertChunk(db, { chunkType: 'raw', confidence: 1.0, createdAt: daysAgo(150) });
+  insertChunk(db, { chunkType: 'decision', confidence: 1.0, createdAt: daysAgo(150) });
+  insertChunk(db, { chunkType: 'fact', confidence: 1.0, createdAt: daysAgo(150) });
+  insertChunk(db, { chunkType: 'action_item', confidence: 1.0, createdAt: daysAgo(150) });
+
+  decayConfidence(db, { config: { reflect: { halfLifeDays: 120, decayRate: 1.0 } } });
+
+  const raw = db.prepare("SELECT confidence FROM chunks WHERE chunk_type = 'raw'").get();
+  const decision = db.prepare("SELECT confidence FROM chunks WHERE chunk_type = 'decision'").get();
+  const fact = db.prepare("SELECT confidence FROM chunks WHERE chunk_type = 'fact'").get();
+  const action = db.prepare("SELECT confidence FROM chunks WHERE chunk_type = 'action_item'").get();
+
+  assert(raw.confidence < decision.confidence,
+    `Raw (${raw.confidence}) should decay more than decision (${decision.confidence})`);
+  assert(fact.confidence > raw.confidence,
+    `Fact (${fact.confidence}) should retain more confidence than raw (${raw.confidence})`);
+  assert(fact.confidence < decision.confidence,
+    `Fact (${fact.confidence}) should decay more than decision (${decision.confidence})`);
+  assert(decision.confidence > 0.7,
+    `Decision should decay slowly at 150 days with rate 0.3, got ${decision.confidence}`);
+  assert(raw.confidence < 0.7,
+    `Raw should noticeably decay at 150 days with rate 1.5, got ${raw.confidence}`);
+
+  db.close();
+}
+
+// ─── Test: Decay half-life config override ───
+console.log('Test: Decay half-life config override');
+{
+  const db = createDb();
+  insertChunk(db, { chunkType: 'raw', confidence: 1.0, createdAt: daysAgo(60) });
+
+  // Aggressive half-life of 30 days
+  decayConfidence(db, { config: { reflect: { halfLifeDays: 30, decayRate: 1.0 } } });
+  const fast = db.prepare("SELECT confidence FROM chunks WHERE chunk_type = 'raw'").get();
+
+  const db2 = createDb();
+  insertChunk(db2, { chunkType: 'raw', confidence: 1.0, createdAt: daysAgo(60) });
+
+  // Gentle half-life of 365 days
+  decayConfidence(db2, { config: { reflect: { halfLifeDays: 365, decayRate: 1.0 } } });
+  const slow = db2.prepare("SELECT confidence FROM chunks WHERE chunk_type = 'raw'").get();
+
+  assert(fast.confidence < slow.confidence,
+    `30-day half-life (${fast.confidence}) should decay more than 365-day (${slow.confidence})`);
+
+  db.close();
+  db2.close();
 }
 
 // ─── Summary ───
