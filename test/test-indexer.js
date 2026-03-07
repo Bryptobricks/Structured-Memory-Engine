@@ -415,6 +415,64 @@ console.log('Test 20: Small content not affected by speaker-turn splitting');
   assert(chunks.length === 1, `Small content should stay as 1 chunk, got ${chunks.length}`);
 }
 
+// ─── Test 21: indexWorkspace — excludePatterns skips matching files ───
+console.log('Test 21: indexWorkspace — excludePatterns skips matching files');
+{
+  const dir = makeTempDir();
+  try {
+    fs.writeFileSync(path.join(dir, 'MEMORY.md'), '# Memory\n\nImportant facts here.\n');
+    fs.writeFileSync(path.join(dir, 'USER.md'), '# User\n\nUser info here.\n');
+    fs.mkdirSync(path.join(dir, 'memory'));
+    fs.writeFileSync(path.join(dir, 'memory', 'old-spec.md'), '# Old Spec\n\nObsolete spec content.\n');
+
+    const db = createDb();
+
+    // Index with exclusion pattern
+    const r = indexWorkspace(db, dir, { force: true, excludePatterns: ['memory/old-spec.md'] });
+    assert(r.excluded === 1, `Should exclude 1 file, got ${r.excluded}`);
+    assert(r.indexed === 2, `Should index 2 files, got ${r.indexed}`);
+
+    // Verify excluded file has no chunks
+    const excludedChunks = db.prepare("SELECT COUNT(*) as n FROM chunks WHERE file_path = 'memory/old-spec.md'").get().n;
+    assert(excludedChunks === 0, `Excluded file should have 0 chunks, got ${excludedChunks}`);
+
+    // Verify non-excluded files are indexed
+    const memChunks = db.prepare("SELECT COUNT(*) as n FROM chunks WHERE file_path = 'MEMORY.md'").get().n;
+    assert(memChunks > 0, `MEMORY.md should have chunks, got ${memChunks}`);
+
+    db.close();
+  } finally {
+    cleanup(dir);
+  }
+}
+
+// ─── Test 22: indexWorkspace — glob excludePatterns ───
+console.log('Test 22: indexWorkspace — glob excludePatterns');
+{
+  const dir = makeTempDir();
+  try {
+    fs.writeFileSync(path.join(dir, 'MEMORY.md'), '# Memory\n\nFacts here.\n');
+    fs.mkdirSync(path.join(dir, 'memory'));
+    fs.writeFileSync(path.join(dir, 'memory', 'sme-spec-v1.md'), '# Spec V1\n\nOld spec.\n');
+    fs.writeFileSync(path.join(dir, 'memory', 'sme-spec-v2.md'), '# Spec V2\n\nOlder spec.\n');
+    fs.writeFileSync(path.join(dir, 'memory', '2026-01-01.md'), '# Daily\n\nKeep this.\n');
+
+    const db = createDb();
+    const r = indexWorkspace(db, dir, { force: true, excludePatterns: ['memory/sme-*.md'] });
+    assert(r.excluded === 2, `Should exclude 2 sme-* files, got ${r.excluded}`);
+
+    const smeChunks = db.prepare("SELECT COUNT(*) as n FROM chunks WHERE file_path LIKE 'memory/sme-%'").get().n;
+    assert(smeChunks === 0, `sme-* files should have 0 chunks, got ${smeChunks}`);
+
+    const dailyChunks = db.prepare("SELECT COUNT(*) as n FROM chunks WHERE file_path = 'memory/2026-01-01.md'").get().n;
+    assert(dailyChunks > 0, `Daily file should still be indexed, got ${dailyChunks}`);
+
+    db.close();
+  } finally {
+    cleanup(dir);
+  }
+}
+
 // ─── Summary ───
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
