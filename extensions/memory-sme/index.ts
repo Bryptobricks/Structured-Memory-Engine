@@ -91,7 +91,7 @@ const memoryPlugin = {
     // Auto-index on startup
     if (autoIndex) {
       try {
-        const result = engine.index();
+        const result = await engine.index();
         api.logger?.info?.(`memory-sme: indexed ${result.indexed} files (${result.total} total)`);
       } catch (err: any) {
         api.logger?.warn?.(`memory-sme: index failed: ${String(err)}`);
@@ -126,7 +126,7 @@ const memoryPlugin = {
         ),
       }),
       async execute(_id: string, params: any) {
-        const results = engine.query(params.query, {
+        const results = await engine.query(params.query, {
           limit: params.limit ?? 10,
           since: params.since,
           type: params.type,
@@ -161,7 +161,7 @@ const memoryPlugin = {
         ),
       }),
       async execute(_id: string, params: any) {
-        const result = engine.remember(params.content, {
+        const result = await engine.remember(params.content, {
           tag: params.tag ?? "fact",
         });
         return {
@@ -187,7 +187,7 @@ const memoryPlugin = {
         ),
       }),
       async execute(_id: string, params: any) {
-        const result = engine.reflect({ dryRun: params.dryRun ?? false });
+        const result = await engine.reflect({ dryRun: params.dryRun ?? false });
         const parts = [
           `Decay: ${result.decay?.decayed ?? 0} chunks`,
           `Reinforce: ${result.reinforce?.reinforced ?? 0} chunks`,
