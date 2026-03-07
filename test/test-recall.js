@@ -622,6 +622,39 @@ console.log('Test 21: chunks containing literal query in spec context get penali
   db.close();
 }
 
+// ─── Test 22: Temporal boost — single-day query dominates over keyword match ───
+console.log('Test 22: Temporal boost — single-day query dominates over keyword match');
+{
+  const db = createDb();
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+  // Yesterday's file with content about a deployment
+  insertChunks(db, `memory/${yesterdayStr}.md`, 1000, [
+    { heading: 'Session Log', content: 'deployed consensus research update and reviewed pull requests', lineStart: 1, lineEnd: 5, entities: [] },
+    { heading: 'Decisions', content: 'decided to deploy the new query pipeline for better performance', lineStart: 6, lineEnd: 10, entities: [] },
+  ], yesterday.toISOString());
+
+  // Old file with strong keyword match for "deployed"
+  insertChunks(db, 'MEMORY.md', 1000, [
+    { heading: 'Deployments', content: 'deployed major update to the production server infrastructure', lineStart: 1, lineEnd: 5, entities: [] },
+  ], daysAgo(30));
+
+  const results = recall(db, 'what was deployed yesterday', { limit: 5 });
+  assert(results.length >= 1, `Should have results, got ${results.length}`);
+  // Top result should be from yesterday's file due to temporal boost
+  assert(results[0].filePath.includes(yesterdayStr),
+    `Top result should be from yesterday (${yesterdayStr}), got ${results[0].filePath}`);
+  // If both files returned, yesterday should dominate
+  const memoryMd = results.find(r => r.filePath === 'MEMORY.md');
+  if (memoryMd) {
+    assert(results[0].score > memoryMd.score * 2,
+      `Yesterday's score should be >2x MEMORY.md score`);
+  }
+  db.close();
+}
+
 // ─── Summary ───
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
