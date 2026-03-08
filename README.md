@@ -6,7 +6,7 @@
 npm install structured-memory-engine
 ```
 
-Persistent, self-maintaining memory that runs locally. No API calls, no cloud, no ongoing cost. **990 tests. <1ms recall. $0/month forever.**
+Persistent, self-maintaining memory that runs locally. No API calls, no cloud, no ongoing cost. **1,369 tests. <1ms recall. $0/month forever.**
 
 <!-- TODO: Add demo GIF here -->
 <!-- ![SME Demo](assets/demo.gif) -->
@@ -63,6 +63,10 @@ AI agents have amnesia. Every session starts from zero. Your agent doesn't remem
 | **Rule Chunk Penalty** | Detects policy/rule content and deprioritizes it for factual queries | **"What did I buy?" returns purchases** — not your Amazon account rules |
 | **Forward-Looking Temporal** | "What's coming up in March?" searches for future events even when no files are dated in March | **Future planning works** — finds upcoming events, deadlines, and milestones |
 | **Recall Test CLI** | Built-in test harness: `npm run test:recall` scores 6 standard queries with anti-term detection | **Regression-proof** — every change validated against real recall quality |
+| **Synonym Expansion** | Bridges vocabulary gaps — "money" finds portfolio content, "health" finds bloodwork | **Natural language works** — no need to use exact keywords from stored memories |
+| **Result Diversity** | File cap (3), heading cap (2), cosine similarity filter (0.80) | **No duplicate context waste** — every injected chunk adds unique information |
+| **Recall Benchmarking** | 10-case test suite with content/type hit rate grading | **Quantified recall quality** — `sme benchmark` reports exactly what's working and what isn't |
+| **Memory Promotion** | Finds high-value daily memories for elevation to long-term storage | **Important facts don't fade** — auto-identifies what deserves permanent memory status |
 
 ## Before & After
 
@@ -191,7 +195,7 @@ Or if installed globally:
 }
 ```
 
-Exposes 9 tools: `sme_query`, `sme_context`, `sme_remember`, `sme_index`, `sme_reflect`, `sme_status`, `sme_entities`, `sme_embed`, `sme_ingest`.
+Exposes 11 tools: `sme_query`, `sme_context`, `sme_remember`, `sme_index`, `sme_reflect`, `sme_status`, `sme_entities`, `sme_embed`, `sme_ingest`, `sme_benchmark`, `sme_promote`.
 
 **Pro tip:** Add this to your CLAUDE.md for automatic memory recall:
 ```
@@ -584,6 +588,8 @@ SME is built in layers. Each layer is independently useful:
 | `sme_entities` | Query the entity graph |
 | `sme_embed` | Manage semantic embeddings |
 | `sme_ingest` | Ingest transcripts or CSV files |
+| `sme_benchmark` | Run recall quality benchmark (10 test cases) |
+| `sme_promote` | Find high-value daily memories for long-term elevation |
 
 ### CLI
 
@@ -599,6 +605,8 @@ sme contradictions [--unresolved]
 sme resolve <contradiction-id> --action keep-newer|keep-older|keep-both|dismiss
 sme archived [--limit N]
 sme restore <chunk-id>
+sme benchmark [--json]
+sme promote [--limit N] [--dry-run]
 ```
 
 ## Design Principles
@@ -613,7 +621,7 @@ sme restore <chunk-id>
 ## Testing
 
 ```bash
-npm test  # 18 suites, 990 tests
+npm test  # 30 suites, 1,369 tests
 ```
 
 ## Acknowledgments

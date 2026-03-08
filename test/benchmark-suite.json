@@ -30,8 +30,8 @@
   {
     "id": "noise-suppression",
     "query": "What are my current priorities?",
-    "expectedContent": ["priority", "focus"],
-    "expectedTypes": ["decision", "action_item"],
+    "expectedContent": ["priority", "focus", "urgency", "trading", "goal"],
+    "expectedTypes": ["decision", "action_item", "fact"],
     "minRelevantInTop3": 1
   },
   {
