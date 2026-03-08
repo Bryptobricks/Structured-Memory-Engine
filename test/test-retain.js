@@ -77,6 +77,74 @@ const dedup = `
 const facts5 = extractFacts(dedup, 'test.md');
 assert(facts5.length === 2, `Expected 2 facts (no dupes), got ${facts5.length}`);
 
+// Test 6: Heuristic classification — preference
+console.log('Test 6: Heuristic — preference detection');
+const heuristic1 = `
+## Random Notes
+- JB prefers warm lighting for the office
+- Some random text that is not classifiable
+`.trim();
+const facts6 = extractFacts(heuristic1, 'test.md');
+const prefFact = facts6.find(f => f.content.includes('warm lighting'));
+assert(prefFact != null, 'Should find the preference bullet');
+assert(prefFact.type === 'preference', `Expected 'preference', got '${prefFact && prefFact.type}'`);
+assert(prefFact.confidence === 0.7, `Expected confidence 0.7, got ${prefFact && prefFact.confidence}`);
+
+// Test 7: Heuristic classification — decision
+console.log('Test 7: Heuristic — decision detection');
+const heuristic2 = `
+- Decided to use PostgreSQL for everything
+`.trim();
+const facts7 = extractFacts(heuristic2, 'test.md');
+assert(facts7.length === 1, `Expected 1 fact, got ${facts7.length}`);
+assert(facts7[0].type === 'decision', `Expected 'decision', got '${facts7[0].type}'`);
+
+// Test 8: Heuristic classification — fact (medical/health)
+console.log('Test 8: Heuristic — fact detection (health)');
+const heuristic3 = `
+- Bought EVEDAL lamp at IKEA for the office
+- Takes 5mg creatine daily in the morning
+`.trim();
+const facts8 = extractFacts(heuristic3, 'test.md');
+assert(facts8.length === 2, `Expected 2 facts, got ${facts8.length}`);
+assert(facts8.every(f => f.type === 'fact'), 'Both should be type fact');
+
+// Test 9: Heuristic — already tagged NOT re-classified
+console.log('Test 9: Heuristic — already tagged lines not re-classified');
+const heuristic4 = `
+- [confirmed] JB prefers dark mode on everything
+`.trim();
+const facts9 = extractFacts(heuristic4, 'test.md');
+assert(facts9.length === 1, `Expected 1 fact, got ${facts9.length}`);
+assert(facts9[0].type === 'confirmed', `Should keep original type 'confirmed', got '${facts9[0].type}'`);
+assert(facts9[0].confidence === 1.0, `Should keep original confidence 1.0, got ${facts9[0].confidence}`);
+
+// Test 10: Heuristic — short lines skipped
+console.log('Test 10: Heuristic — short lines skipped');
+const heuristic5 = `
+- Likes it
+- Very short
+`.trim();
+const facts10 = extractFacts(heuristic5, 'test.md');
+assert(facts10.length === 0, `Expected 0 facts (too short for heuristic), got ${facts10.length}`);
+
+// Test 11: Heuristic — non-matching bullets stay raw (not extracted)
+console.log('Test 11: Non-matching bullets not classified');
+const heuristic6 = `
+- The meeting was productive and went well overall
+- Also discussed the roadmap timeline with the team
+`.trim();
+const facts11 = extractFacts(heuristic6, 'test.md');
+assert(facts11.length === 0, `Expected 0 facts (no heuristic match), got ${facts11.length}`);
+
+// Test 12: Heuristic disabled via config
+console.log('Test 12: Heuristic disabled via config');
+const heuristic7 = `
+- JB prefers warm lighting for the office
+`.trim();
+const facts12 = extractFacts(heuristic7, 'test.md', { heuristicClassification: false });
+assert(facts12.length === 0, `Expected 0 facts with heuristic disabled, got ${facts12.length}`);
+
 // Summary
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
