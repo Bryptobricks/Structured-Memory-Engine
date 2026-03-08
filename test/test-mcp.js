@@ -115,7 +115,7 @@ console.log('Test 4: handleReflect formatting');
 
   const result = await handleReflect(db, { dryRun: true }, null, ws);
   const text = result.content[0].text;
-  assert(text.includes('[DRY RUN]'), 'Expected DRY RUN prefix');
+  assert(text.includes('[SHADOW]'), 'Expected SHADOW prefix');
   assert(text.includes('Decayed:'), 'Expected Decayed count');
   assert(text.includes('Reinforced:'), 'Expected Reinforced count');
   assert(text.includes('Marked stale:'), 'Expected Marked stale count');
