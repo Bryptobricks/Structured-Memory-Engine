@@ -1,0 +1,72 @@
+[
+  {
+    "id": "supplements-stack",
+    "query": "What supplements am I taking?",
+    "expectedContent": ["stack", "supplement"],
+    "expectedTypes": ["fact", "preference"],
+    "minRelevantInTop3": 1
+  },
+  {
+    "id": "portfolio-allocation",
+    "query": "How is my money allocated?",
+    "expectedContent": ["portfolio", "allocation"],
+    "expectedTypes": ["fact"],
+    "minRelevantInTop3": 1
+  },
+  {
+    "id": "parri-person",
+    "query": "Who is Parri?",
+    "expectedContent": ["parri"],
+    "expectedTypes": ["fact"],
+    "minRelevantInTop3": 1
+  },
+  {
+    "id": "stale-relative",
+    "query": "What happened yesterday?",
+    "expectedContent": [],
+    "expectedTypes": [],
+    "minRelevantInTop3": 0
+  },
+  {
+    "id": "noise-suppression",
+    "query": "What are my current priorities?",
+    "expectedContent": ["priority", "focus"],
+    "expectedTypes": ["decision", "action_item"],
+    "minRelevantInTop3": 1
+  },
+  {
+    "id": "temporal-yesterday",
+    "query": "What did I do yesterday?",
+    "expectedContent": [],
+    "expectedTypes": [],
+    "minRelevantInTop3": 0
+  },
+  {
+    "id": "elijah-entity",
+    "query": "Tell me about Elijah",
+    "expectedContent": ["elijah"],
+    "expectedTypes": ["fact"],
+    "minRelevantInTop3": 1
+  },
+  {
+    "id": "bromantane-decision",
+    "query": "What did I decide about bromantane?",
+    "expectedContent": ["bromantane"],
+    "expectedTypes": ["decision"],
+    "minRelevantInTop3": 1
+  },
+  {
+    "id": "apartment-home",
+    "query": "What's going on at the apartment?",
+    "expectedContent": ["apartment", "home"],
+    "expectedTypes": ["fact"],
+    "minRelevantInTop3": 1
+  },
+  {
+    "id": "health-labs",
+    "query": "What do my latest labs show?",
+    "expectedContent": ["labs", "blood"],
+    "expectedTypes": ["fact"],
+    "minRelevantInTop3": 1
+  }
+]
