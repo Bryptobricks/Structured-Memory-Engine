@@ -23,6 +23,7 @@ function createDb() {
   try { db.exec('ALTER TABLE chunks ADD COLUMN access_count INTEGER DEFAULT 0'); } catch (_) {}
   try { db.exec('ALTER TABLE chunks ADD COLUMN last_accessed TEXT'); } catch (_) {}
   try { db.exec('ALTER TABLE chunks ADD COLUMN stale INTEGER DEFAULT 0'); } catch (_) {}
+  try { db.exec('ALTER TABLE chunks ADD COLUMN content_updated_at TEXT'); } catch (_) {}
   try {
     db.exec('DROP TRIGGER IF EXISTS chunks_au');
     db.exec(`CREATE TRIGGER IF NOT EXISTS chunks_au AFTER UPDATE OF content, heading, entities ON chunks BEGIN
@@ -474,6 +475,58 @@ console.log('Test 22: score() applies dynamic file weight to daily files');
   // The boost should be multiplicative — today gets 2.5x vs 1.0x
   const ratio = scoreToday / scoreOld;
   assert(ratio > 2.0, `Score ratio should be >2.0x, got ${ratio.toFixed(2)}`);
+}
+
+// ─── Test 23: score() — value_score multiplier (v8) ───
+console.log('Test 23: score() — value_score multiplier');
+{
+  const base = { confidence: 1.0, created_at: daysAgo(5), chunk_type: 'fact', file_weight: 1.0, _normalizedFts: 0.5 };
+
+  // value_score=0.8 → 0.7 + 0.8*0.6 = 1.18x
+  const high = { ...base, value_score: 0.8 };
+  const scoreHigh = score(high, nowMs, CIL_PROFILE);
+
+  // value_score=0.2 → 0.7 + 0.2*0.6 = 0.82x
+  const low = { ...base, value_score: 0.2 };
+  const scoreLow = score(low, nowMs, CIL_PROFILE);
+
+  assert(scoreHigh > scoreLow, `value_score=0.8 (${scoreHigh.toFixed(3)}) should beat 0.2 (${scoreLow.toFixed(3)})`);
+
+  // value_score=null → 1.0x (neutral)
+  const noValue = { ...base, value_score: null };
+  const scoreNull = score(noValue, nowMs, CIL_PROFILE);
+
+  // Null should be between high and low (neutral)
+  assert(scoreNull < scoreHigh, `null value_score (${scoreNull.toFixed(3)}) should be below 0.8 (${scoreHigh.toFixed(3)})`);
+  assert(scoreNull > scoreLow, `null value_score (${scoreNull.toFixed(3)}) should be above 0.2 (${scoreLow.toFixed(3)})`);
+}
+
+// ─── Test 24: score() — value scoring disabled via overrides ───
+console.log('Test 24: score() — value scoring disabled');
+{
+  const base = { confidence: 1.0, created_at: daysAgo(5), chunk_type: 'fact', file_weight: 1.0, _normalizedFts: 0.5 };
+  const withValue = { ...base, value_score: 0.2 };
+
+  const enabled = score(withValue, nowMs, CIL_PROFILE);
+  const disabled = score(withValue, nowMs, CIL_PROFILE, { valueScoringEnabled: false });
+
+  // Disabled should be higher because the 0.2 value_score penalty is removed
+  assert(disabled > enabled, `Disabled value scoring (${disabled.toFixed(3)}) should be higher than enabled (${enabled.toFixed(3)})`);
+}
+
+// ─── Test 25: score() — synonym match penalty (v8) ───
+console.log('Test 25: score() — synonym match penalty');
+{
+  const base = { confidence: 1.0, created_at: daysAgo(5), chunk_type: 'fact', file_weight: 1.0, _normalizedFts: 0.5 };
+  const direct = { ...base, _synonymMatch: false };
+  const synonym = { ...base, _synonymMatch: true };
+
+  const scoreDirect = score(direct, nowMs, CIL_PROFILE);
+  const scoreSynonym = score(synonym, nowMs, CIL_PROFILE);
+
+  assert(scoreDirect > scoreSynonym, `Direct match (${scoreDirect.toFixed(3)}) should beat synonym-only (${scoreSynonym.toFixed(3)})`);
+  const ratio = scoreSynonym / scoreDirect;
+  assert(ratio > 0.80 && ratio < 0.90, `Synonym penalty should be ~0.85x, ratio: ${ratio.toFixed(3)}`);
 }
 
 // ─── Summary ───
