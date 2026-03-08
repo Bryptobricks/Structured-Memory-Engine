@@ -616,6 +616,10 @@ sme restore <chunk-id>
 npm test  # 18 suites, 990 tests
 ```
 
+## Acknowledgments
+
+- [Gigabrain](https://github.com/legendaryvibecoder/gigabrain) by [@legendaryvibecoder](https://github.com/legendaryvibecoder) — A fellow OpenClaw memory plugin that inspired several v7.3 features including quality gates, semantic deduplication with type-aware thresholds, and heuristic classification. Their architecture around policy-driven value scoring and plausibility heuristics continues to inform SME's roadmap.
+
 ## License
 
 MIT
