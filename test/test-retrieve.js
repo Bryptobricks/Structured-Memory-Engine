@@ -4,7 +4,7 @@
  */
 const Database = require('better-sqlite3');
 const { SCHEMA, insertChunks } = require('../lib/store');
-const { retrieveChunks, sanitizeFtsQuery, buildOrQuery, loadAliases } = require('../lib/retrieve');
+const { retrieveChunks, sanitizeFtsQuery, buildOrQuery, buildTemporalExpansion, loadAliases, VAGUE_QUERY_WORDS, TEMPORAL_EXPANSION_TERMS } = require('../lib/retrieve');
 const { recall } = require('../lib/recall');
 const { getRelevantContext } = require('../lib/context');
 const { ensureEmbeddingColumn } = require('../lib/embeddings');
@@ -268,6 +268,85 @@ console.log('Test 8: Shared pipeline ensures both callers see identical FTS resu
     },
   });
   assert(result2.rows.length >= 1, `FTS match path should still work, got ${result2.rows.length} rows`);
+
+  db.close();
+}
+
+// ─── Test: buildTemporalExpansion ───
+{
+  console.log('\nTest: buildTemporalExpansion');
+
+  // 1. Vague temporal query triggers expansion
+  const result1 = buildTemporalExpansion('accomplish', { dateTerms: ['2025-03-05'], since: '2025-03-05' });
+  assert(result1 !== null, 'vague temporal query should trigger expansion');
+  assert(result1.includes('"built"'), 'expansion should include action verbs');
+  assert(result1.includes('"accomplish"'), 'expansion should include original term');
+  assert(result1.includes(' OR '), 'expansion should use OR logic');
+
+  // 2. Specific temporal query does NOT trigger expansion
+  const result2 = buildTemporalExpansion('deployment strategy', { dateTerms: ['2025-03-05'], since: '2025-03-05' });
+  assert(result2 === null, 'specific query should NOT trigger expansion');
+
+  // 3. Non-temporal query does NOT trigger expansion
+  const result3 = buildTemporalExpansion('accomplish', { dateTerms: [], since: null });
+  assert(result3 === null, 'non-temporal query should NOT trigger expansion');
+
+  // 4. Mixed vague + specific does NOT trigger expansion
+  const result4 = buildTemporalExpansion('accomplish deployment', { dateTerms: ['2025-03-05'], since: '2025-03-05' });
+  assert(result4 === null, 'mixed vague+specific should NOT trigger expansion');
+
+  // 5. All stop words stripped → no expansion (tokens.length === 0)
+  const result5 = buildTemporalExpansion('what did I', { dateTerms: ['2025-03-05'], since: '2025-03-05' });
+  assert(result5 === null, 'all-stopwords should NOT trigger expansion');
+
+  // 6. Multiple vague words still trigger
+  const result6 = buildTemporalExpansion('work done', { dateTerms: ['2025-03-05'], since: '2025-03-05' });
+  assert(result6 !== null, 'multiple vague words should trigger expansion');
+
+  // 7. Null strippedQuery
+  const result7 = buildTemporalExpansion(null, { dateTerms: ['2025-03-05'], since: '2025-03-05' });
+  assert(result7 === null, 'null query should not trigger expansion');
+}
+
+// ─── Test: Temporal expansion in retrieval pipeline ───
+{
+  console.log('\nTest: Temporal expansion finds chunks via action verbs');
+  const db = createDb();
+
+  // Insert a chunk with action verb content on a specific date
+  const chunks = [{ content: 'Built the new authentication system and deployed it to staging', chunkType: 'raw', heading: null }];
+  insertChunks(db, 'memory/2025-03-05.md', Date.now(), chunks, '2025-03-05T10:00:00.000Z');
+
+  // Query with vague temporal keyword — "accomplish" won't match, but expansion adds "built" and "deployed"
+  const result = retrieveChunks(db, 'what did I accomplish on Wednesday', {
+    limit: 10,
+    temporal: {
+      strippedQuery: 'accomplish',
+      since: '2025-03-05',
+      until: '2025-03-06',
+      dateTerms: ['2025-03-05'],
+      forwardLooking: false,
+    },
+  });
+
+  assert(result.rows.length >= 1, `expansion should find chunks via action verbs, got ${result.rows.length}`);
+  if (result.rows.length > 0) {
+    assert(result.rows[0].content.includes('authentication'),
+      'should find the chunk with action verbs');
+  }
+
+  // Non-vague temporal query — should still use normal FTS path
+  const result2 = retrieveChunks(db, 'authentication system on Wednesday', {
+    limit: 10,
+    temporal: {
+      strippedQuery: 'authentication system',
+      since: '2025-03-05',
+      until: '2025-03-06',
+      dateTerms: ['2025-03-05'],
+      forwardLooking: false,
+    },
+  });
+  assert(result2.rows.length >= 1, `specific query should still find via FTS, got ${result2.rows.length}`);
 
   db.close();
 }
