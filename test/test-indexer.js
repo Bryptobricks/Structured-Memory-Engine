@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { SCHEMA, insertChunks } = require('../lib/store');
-const { extractEntities, chunkMarkdown, discoverFiles, indexWorkspace, classifyChunk } = require('../lib/indexer');
+const { extractEntities, chunkMarkdown, discoverFiles, indexWorkspace, classifyChunk, classifySourceType, classifyDomain } = require('../lib/indexer');
 
 let passed = 0, failed = 0;
 
@@ -24,6 +24,8 @@ function createDb() {
   try { db.exec('ALTER TABLE chunks ADD COLUMN last_accessed TEXT'); } catch (_) {}
   try { db.exec('ALTER TABLE chunks ADD COLUMN stale INTEGER DEFAULT 0'); } catch (_) {}
   try { db.exec('ALTER TABLE chunks ADD COLUMN content_updated_at TEXT'); } catch (_) {}
+  try { db.exec('ALTER TABLE chunks ADD COLUMN source_type TEXT DEFAULT \'indexed\''); } catch (_) {}
+  try { db.exec('ALTER TABLE chunks ADD COLUMN domain TEXT DEFAULT \'general\''); } catch (_) {}
   try {
     db.exec('DROP TRIGGER IF EXISTS chunks_au');
     db.exec(`CREATE TRIGGER IF NOT EXISTS chunks_au AFTER UPDATE OF content, heading, entities ON chunks BEGIN
@@ -510,6 +512,101 @@ console.log('Test 24: Auto-classify during indexing');
 
     const rawChunks = db.prepare("SELECT * FROM chunks WHERE chunk_type = 'raw'").all();
     assert(rawChunks.length >= 1, `Plain text should remain raw, got ${rawChunks.length}`);
+
+    db.close();
+  } finally {
+    cleanup(dir);
+  }
+}
+
+// ─── Test 25: classifySourceType ───
+console.log('Test 25: classifySourceType');
+{
+  assert(classifySourceType('memory/2025-01-01.md') === 'manual', 'memory/ → manual');
+  assert(classifySourceType('ingest/transcript.md') === 'ingested', 'ingest/ → ingested');
+  assert(classifySourceType('MEMORY.md') === 'indexed', 'root files → indexed');
+  assert(classifySourceType('data/notes.md') === 'indexed', 'data/ → indexed');
+}
+
+// ─── Test 26: classifyChunk heuristic decision detection ───
+console.log('Test 26: classifyChunk heuristic decision detection');
+{
+  const result = classifyChunk('We decided to use Postgres and going with the managed tier.');
+  assert(result !== null && typeof result === 'object', 'Should return object for heuristic');
+  assert(result.type === 'decision', `Should be decision, got ${result.type}`);
+  assert(result.confidence === 0.7, `Confidence should be 0.7, got ${result.confidence}`);
+  // Single signal — not enough
+  const single = classifyChunk('We decided to use Postgres.');
+  assert(single === null, 'Single decision signal should not trigger heuristic');
+}
+
+// ─── Test 27: classifyChunk heuristic preference detection ───
+console.log('Test 27: classifyChunk heuristic preference detection');
+{
+  const result = classifyChunk('JB prefers dark mode for all editors and terminals.');
+  assert(result !== null && typeof result === 'object', 'Should return object for preference');
+  assert(result.type === 'preference', `Should be preference, got ${result.type}`);
+}
+
+// ─── Test 28: classifyDomain ───
+console.log('Test 28: classifyDomain');
+{
+  assert(classifyDomain('Take 500mg vitamin D and check blood labs', 'notes.md', {}) === 'health', 'Health keywords');
+  assert(classifyDomain('Swap ETH for USDC on the dex, check yield farming', 'notes.md', {}) === 'crypto', 'Crypto keywords');
+  assert(classifyDomain('Sprint planning meeting, deploy to staging', 'notes.md', {}) === 'work', 'Work keywords');
+  assert(classifyDomain('Just some general notes about life', 'notes.md', {}) === 'general', 'No domain match');
+  // Config path pattern takes priority
+  assert(classifyDomain('random text', 'health/notes.md', { health: ['health/'] }) === 'health', 'Config path pattern');
+}
+
+// ─── Test 29: indexWorkspace sets source_type and domain ───
+console.log('Test 29: indexWorkspace sets source_type and domain');
+{
+  const dir = makeTempDir();
+  try {
+    fs.mkdirSync(path.join(dir, 'memory'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'MEMORY.md'), '# Notes\n\nSome indexed content here\n');
+    fs.writeFileSync(path.join(dir, 'memory', '2025-01-01.md'), '# Daily\n\nTook 500mg vitamin D supplement and checked blood labs\n');
+
+    const db = createDb();
+    indexWorkspace(db, dir, { force: true });
+
+    const indexed = db.prepare("SELECT * FROM chunks WHERE source_type = 'indexed'").all();
+    assert(indexed.length >= 1, `Should have indexed chunks, got ${indexed.length}`);
+
+    const manual = db.prepare("SELECT * FROM chunks WHERE source_type = 'manual'").all();
+    assert(manual.length >= 1, `Should have manual chunks, got ${manual.length}`);
+
+    // Domain classification
+    const health = db.prepare("SELECT * FROM chunks WHERE domain = 'health'").all();
+    assert(health.length >= 1, `Should have health-domain chunk, got ${health.length}`);
+
+    db.close();
+  } finally {
+    cleanup(dir);
+  }
+}
+
+// ─── Test 30: classifyChunk heuristic in indexing pipeline ───
+console.log('Test 30: classifyChunk heuristic in indexing pipeline');
+{
+  const dir = makeTempDir();
+  try {
+    fs.writeFileSync(path.join(dir, 'MEMORY.md'),
+      '# Decisions\n\nWe decided to use Bun and going with the latest version. Committed to TypeScript.\n\n# Prefs\n\nJB prefers dark mode for everything.\n');
+
+    const db = createDb();
+    indexWorkspace(db, dir, { force: true });
+
+    const decisions = db.prepare("SELECT * FROM chunks WHERE chunk_type = 'decision'").all();
+    assert(decisions.length >= 1, `Should have heuristic decision chunk, got ${decisions.length}`);
+
+    const prefs = db.prepare("SELECT * FROM chunks WHERE chunk_type = 'preference'").all();
+    assert(prefs.length >= 1, `Should have heuristic preference chunk, got ${prefs.length}`);
+
+    // Heuristic chunks should have 0.7 confidence
+    const heuristic = db.prepare("SELECT * FROM chunks WHERE confidence = 0.7").all();
+    assert(heuristic.length >= 1, `Should have chunks with 0.7 confidence, got ${heuristic.length}`);
 
     db.close();
   } finally {

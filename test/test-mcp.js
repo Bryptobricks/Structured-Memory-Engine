@@ -35,6 +35,8 @@ function createDb(workspace) {
   try { db.exec('ALTER TABLE chunks ADD COLUMN last_accessed TEXT'); } catch (_) {}
   try { db.exec('ALTER TABLE chunks ADD COLUMN stale INTEGER DEFAULT 0'); } catch (_) {}
   try { db.exec('ALTER TABLE chunks ADD COLUMN content_updated_at TEXT'); } catch (_) {}
+  try { db.exec('ALTER TABLE chunks ADD COLUMN source_type TEXT DEFAULT \'indexed\''); } catch (_) {}
+  try { db.exec('ALTER TABLE chunks ADD COLUMN domain TEXT DEFAULT \'general\''); } catch (_) {}
   try {
     db.exec('DROP TRIGGER IF EXISTS chunks_au');
     db.exec(`CREATE TRIGGER IF NOT EXISTS chunks_au AFTER UPDATE OF content, heading, entities ON chunks BEGIN
@@ -481,6 +483,27 @@ console.log('Test 21: handleReflect shows unresolved contradiction reminder');
   const text = result.content[0].text;
   assert(text.includes('unresolved contradiction'), `Expected unresolved reminder, got: ${text}`);
   assert(text.includes('sme_contradictions'), 'Should mention sme_contradictions tool');
+  db.close();
+  fs.rmSync(ws, { recursive: true });
+}
+
+// ─── Test 22: handleStatus shows alerts and distributions ───
+console.log('Test 22: handleStatus shows alerts and distributions');
+{
+  const ws = tmpWorkspace();
+  const db = createDb(ws);
+  const now = new Date().toISOString();
+  // Insert chunks with various types
+  insertChunk(db, { content: 'A fact about testing alerts', heading: 'Facts', chunkType: 'fact', confidence: 1.0, filePath: 'a.md', createdAt: now });
+  insertChunk(db, { content: 'A stale chunk that is old', heading: 'Old', chunkType: 'raw', confidence: 0.2, filePath: 'b.md', createdAt: now });
+  // Mark one as stale
+  db.prepare('UPDATE chunks SET stale = 1 WHERE id = 2').run();
+
+  const result = handleStatus(db);
+  const text = result.content[0].text;
+  assert(text.includes('Alerts:'), `Expected Alerts section, got: ${text}`);
+  assert(text.includes('stale chunk'), 'Should mention stale chunks');
+  assert(text.includes('Chunk types:'), 'Should have chunk types distribution');
   db.close();
   fs.rmSync(ws, { recursive: true });
 }

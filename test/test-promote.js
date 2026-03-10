@@ -22,6 +22,8 @@ function createDb() {
   try { db.exec('ALTER TABLE chunks ADD COLUMN value_score REAL'); } catch (_) {}
   try { db.exec('ALTER TABLE chunks ADD COLUMN value_label TEXT'); } catch (_) {}
   try { db.exec('ALTER TABLE chunks ADD COLUMN content_updated_at TEXT'); } catch (_) {}
+  try { db.exec('ALTER TABLE chunks ADD COLUMN source_type TEXT DEFAULT \'indexed\''); } catch (_) {}
+  try { db.exec('ALTER TABLE chunks ADD COLUMN domain TEXT DEFAULT \'general\''); } catch (_) {}
   return db;
 }
 
