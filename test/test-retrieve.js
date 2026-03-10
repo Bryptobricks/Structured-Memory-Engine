@@ -226,6 +226,52 @@ console.log('Test 8: Shared pipeline ensures both callers see identical FTS resu
   db.close();
 }
 
+// ─── Test: FTS-empty temporal fallback ───
+{
+  console.log('\nTest: FTS returns 0 but temporal dates resolved → fallback to date-range scan');
+  const db = createDb();
+  // Insert a chunk dated 2025-03-05 (a Wednesday)
+  const chunks = [{ content: 'Had a great team standup and planned the sprint', chunkType: 'raw', heading: null }];
+  insertChunks(db, 'memory/2025-03-05.md', Date.now(), chunks, '2025-03-05T10:00:00.000Z');
+
+  // Insert another chunk on a different date
+  const other = [{ content: 'Reviewed pull requests and deployed staging', chunkType: 'raw', heading: null }];
+  insertChunks(db, 'memory/2025-03-06.md', Date.now(), other, '2025-03-06T10:00:00.000Z');
+
+  // Query with temporal date + unmatchable keyword — "accomplish" won't FTS-match anything
+  const result = retrieveChunks(db, 'what did I accomplish on Wednesday', {
+    limit: 10,
+    temporal: {
+      strippedQuery: 'accomplish',
+      since: '2025-03-05',
+      until: '2025-03-06',
+      dateTerms: ['wednesday'],
+      forwardLooking: false,
+    },
+  });
+
+  assert(result.rows.length >= 1, `should fallback to date-range scan, got ${result.rows.length} rows`);
+  if (result.rows.length > 0) {
+    assert(result.rows[0].content.includes('team standup'),
+      'should return the chunk from the resolved date');
+  }
+
+  // Verify: when FTS DOES match, no fallback needed (normal path)
+  const result2 = retrieveChunks(db, 'standup on Wednesday', {
+    limit: 10,
+    temporal: {
+      strippedQuery: 'standup',
+      since: '2025-03-05',
+      until: '2025-03-06',
+      dateTerms: ['wednesday'],
+      forwardLooking: false,
+    },
+  });
+  assert(result2.rows.length >= 1, `FTS match path should still work, got ${result2.rows.length} rows`);
+
+  db.close();
+}
+
 // ─── Summary ───
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
