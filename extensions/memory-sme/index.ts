@@ -76,7 +76,7 @@ const memoryPlugin = {
   description: "Structured Memory Engine — FTS5, confidence scoring, entity graph, contradiction detection",
   kind: "memory" as const,
 
-  register(api: any) {
+  async register(api: any) {
     const cfg = api.pluginConfig ?? {};
     const workspace = cfg.workspace ?? api.resolvePath?.(".") ?? process.cwd();
     const autoIndex = cfg.autoIndex !== false;

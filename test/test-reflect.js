@@ -38,11 +38,11 @@ function createDb() {
   return db;
 }
 
-function insertChunk(db, { heading = null, content = 'test content', chunkType = 'raw', confidence = 1.0, createdAt = null, accessCount = 0, lastAccessed = null, stale = 0, filePath = 'test.md' } = {}) {
+function insertChunk(db, { heading = null, content = 'test content', chunkType = 'raw', confidence = 1.0, createdAt = null, accessCount = 0, lastAccessed = null, stale = 0, filePath = 'test.md', domain = 'general' } = {}) {
   const now = new Date().toISOString();
-  const result = db.prepare(`INSERT INTO chunks (file_path, heading, content, line_start, line_end, entities, chunk_type, confidence, created_at, indexed_at, file_weight, access_count, last_accessed, stale)
-    VALUES (?, ?, ?, 1, 10, '[]', ?, ?, ?, ?, 1.0, ?, ?, ?)`).run(
-    filePath, heading, content, chunkType, confidence, createdAt || now, now, accessCount, lastAccessed, stale
+  const result = db.prepare(`INSERT INTO chunks (file_path, heading, content, line_start, line_end, entities, chunk_type, confidence, created_at, indexed_at, file_weight, access_count, last_accessed, stale, domain)
+    VALUES (?, ?, ?, 1, 10, '[]', ?, ?, ?, ?, 1.0, ?, ?, ?, ?)`).run(
+    filePath, heading, content, chunkType, confidence, createdAt || now, now, accessCount, lastAccessed, stale, domain
   );
   return result.lastInsertRowid;
 }
@@ -632,6 +632,45 @@ console.log('Test: Decay half-life config override');
 
   db.close();
   db2.close();
+}
+
+// ─── Test 26: Cross-domain contradiction gate ───
+console.log('Test 26: Cross-domain chunks skip contradiction detection');
+{
+  const db = createDb();
+  // Same heading "Recommendation" in different domains — should NOT flag
+  insertChunk(db, { heading: 'Recommendation', content: 'recommend moving liquidity pool position to not use the old vault strategy', filePath: 'crypto-notes.md', createdAt: daysAgo(10), domain: 'crypto' });
+  insertChunk(db, { heading: 'Recommendation', content: 'recommend not changing the scoring threshold for the SME recall pipeline position', filePath: 'sme-spec.md', createdAt: daysAgo(5), domain: 'work' });
+
+  const result = detectContradictions(db, { dryRun: false });
+  assert(result.newFlags === 0, `Expected 0 contradictions for cross-domain chunks, got ${result.newFlags}`);
+  db.close();
+}
+
+// ─── Test 27: Same-domain contradictions still detected ───
+console.log('Test 27: Same-domain contradictions still detected');
+{
+  const db = createDb();
+  // Same heading, same domain — should flag
+  insertChunk(db, { heading: 'Daily Protocol', content: 'takes creatine sublingual daily morning protocol for focus energy', filePath: 'health/jan.md', createdAt: daysAgo(60), domain: 'health' });
+  insertChunk(db, { heading: 'Daily Protocol', content: 'stopped creatine sublingual daily morning protocol due tolerance', filePath: 'health/feb.md', createdAt: daysAgo(10), domain: 'health' });
+
+  const result = detectContradictions(db, { dryRun: false });
+  assert(result.newFlags === 1, `Expected 1 contradiction for same-domain chunks, got ${result.newFlags}`);
+  db.close();
+}
+
+// ─── Test 28: General domain still compared with everything ───
+console.log('Test 28: General domain chunks still compared');
+{
+  const db = createDb();
+  // One 'general' and one 'health' — should still compare (general is not filtered)
+  insertChunk(db, { heading: 'Daily Protocol', content: 'takes creatine sublingual daily morning protocol for focus energy', filePath: 'notes.md', createdAt: daysAgo(60), domain: 'general' });
+  insertChunk(db, { heading: 'Daily Protocol', content: 'stopped creatine sublingual daily morning protocol due tolerance', filePath: 'health/feb.md', createdAt: daysAgo(10), domain: 'health' });
+
+  const result = detectContradictions(db, { dryRun: false });
+  assert(result.newFlags === 1, `Expected 1 contradiction when one chunk is general domain, got ${result.newFlags}`);
+  db.close();
 }
 
 // ─── Summary ───
