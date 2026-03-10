@@ -578,6 +578,133 @@ console.log('Test 49: "February 2026" without day does not produce bad date');
   }
 }
 
+// ─── Test 50: Abbreviation — "last wed" ───
+console.log('Test 50: Abbreviation — last wed');
+{
+  // NOW = Feb 28 (Saturday). Most recent Wednesday = Feb 25 (3 days back).
+  const r = resolveTemporalQuery('what happened last wed?', NOW);
+  assert(r.since !== null, 'last wed should set since');
+  assert(r.dateTerms[0] === '2026-02-25', `Expected 2026-02-25, got ${r.dateTerms[0]}`);
+}
+
+// ─── Test 51: Abbreviation — "last thu" ───
+console.log('Test 51: Abbreviation — last thu');
+{
+  const r = resolveTemporalQuery('what happened last thu?', NOW);
+  assert(r.dateTerms[0] === '2026-02-26', `Expected 2026-02-26, got ${r.dateTerms[0]}`);
+}
+
+// ─── Test 52: Abbreviation — "last fri" ───
+console.log('Test 52: Abbreviation — last fri');
+{
+  const r = resolveTemporalQuery('tell me about last fri', NOW);
+  assert(r.dateTerms[0] === '2026-02-27', `Expected 2026-02-27, got ${r.dateTerms[0]}`);
+}
+
+// ─── Test 53: Abbreviation — "last thurs" ───
+console.log('Test 53: Abbreviation — last thurs');
+{
+  const r = resolveTemporalQuery('last thurs meeting notes', NOW);
+  assert(r.dateTerms[0] === '2026-02-26', `Expected 2026-02-26, got ${r.dateTerms[0]}`);
+}
+
+// ─── Test 54: "this monday" — past day in current week ───
+console.log('Test 54: this monday');
+{
+  // NOW = Feb 28 (Saturday). This monday = Feb 23.
+  const r = resolveTemporalQuery('what did I do this monday?', NOW);
+  assert(r.since !== null, 'this monday should set since');
+  assert(r.dateTerms[0] === '2026-02-23', `Expected 2026-02-23, got ${r.dateTerms[0]}`);
+}
+
+// ─── Test 55: "this saturday" on Saturday → today ───
+console.log('Test 55: this saturday on Saturday → today');
+{
+  const r = resolveTemporalQuery('what about this saturday?', NOW);
+  assert(r.dateTerms[0] === '2026-02-28', `Expected today 2026-02-28, got ${r.dateTerms[0]}`);
+}
+
+// ─── Test 56: "next monday" ───
+console.log('Test 56: next monday');
+{
+  // NOW = Feb 28 (Saturday). Next Monday = Mar 2.
+  const r = resolveTemporalQuery('what is planned for next monday?', NOW);
+  assert(r.dateTerms[0] === '2026-03-02', `Expected 2026-03-02, got ${r.dateTerms[0]}`);
+  assert(r.forwardLooking === true, 'next monday should set forwardLooking');
+}
+
+// ─── Test 57: "next friday" ───
+console.log('Test 57: next friday');
+{
+  // NOW = Feb 28 (Saturday). Next Friday = Mar 6.
+  const r = resolveTemporalQuery('meeting next friday', NOW);
+  assert(r.dateTerms[0] === '2026-03-06', `Expected 2026-03-06, got ${r.dateTerms[0]}`);
+  assert(r.forwardLooking === true, 'next friday should set forwardLooking');
+}
+
+// ─── Test 58: "next saturday" on Saturday → 7 days forward ───
+console.log('Test 58: next saturday on Saturday → 7 days forward');
+{
+  const r = resolveTemporalQuery('next saturday plans', NOW);
+  assert(r.dateTerms[0] === '2026-03-07', `Expected 2026-03-07, got ${r.dateTerms[0]}`);
+  assert(r.forwardLooking === true, 'next saturday should set forwardLooking');
+}
+
+// ─── Test 59: "last saturday" on Saturday → 7 days back ───
+console.log('Test 59: last saturday on Saturday → 7 days back');
+{
+  const r = resolveTemporalQuery('what happened last saturday?', NOW);
+  assert(r.dateTerms[0] === '2026-02-21', `Expected 2026-02-21, got ${r.dateTerms[0]}`);
+}
+
+// ─── Test 60: "next wed" abbreviation ───
+console.log('Test 60: next wed abbreviation');
+{
+  // NOW = Feb 28 (Saturday). Next Wed = Mar 4.
+  const r = resolveTemporalQuery('next wed', NOW);
+  assert(r.dateTerms[0] === '2026-03-04', `Expected 2026-03-04, got ${r.dateTerms[0]}`);
+  assert(r.forwardLooking === true, 'next wed should set forwardLooking');
+}
+
+// ─── Test 61: "this fri" abbreviation ───
+console.log('Test 61: this fri');
+{
+  // NOW = Feb 28 (Saturday). This friday = Feb 27 (yesterday, same week).
+  const r = resolveTemporalQuery('this fri', NOW);
+  assert(r.dateTerms[0] === '2026-02-27', `Expected 2026-02-27, got ${r.dateTerms[0]}`);
+}
+
+// ─── Test 62: "previous wednesday" ───
+console.log('Test 62: previous wednesday');
+{
+  const r = resolveTemporalQuery('what happened previous wednesday?', NOW);
+  assert(r.dateTerms[0] === '2026-02-25', `Expected 2026-02-25, got ${r.dateTerms[0]}`);
+}
+
+// ─── Test 63: Compound abbreviation — "wed of last week" ───
+console.log('Test 63: Compound abbreviation — wed of last week');
+{
+  // NOW = Feb 28 (Saturday). Last week = Feb 15-21. Wed of last week = Feb 18.
+  const r = resolveTemporalQuery('What happened wed of last week?', NOW);
+  assert(r.dateTerms[0] === '2026-02-18', `Expected 2026-02-18, got ${r.dateTerms[0]}`);
+}
+
+// ─── Test 64: "last wed" stripped from query ───
+console.log('Test 64: last wed stripped from query');
+{
+  const r = resolveTemporalQuery('what happened last wed?', NOW);
+  assert(!r.strippedQuery.includes('last wed'), `last wed should be stripped, got: ${r.strippedQuery}`);
+}
+
+// ─── Test 65: Weekday with reference date Mar 10 (Tuesday) ───
+console.log('Test 65: Weekday resolution with Tuesday reference');
+{
+  const TUE = new Date('2026-03-10T12:00:00.000Z'); // Tuesday
+  const r = resolveTemporalQuery('What did I accomplish last Wednesday?', TUE);
+  // Last Wednesday from Tuesday Mar 10 = Mar 4
+  assert(r.dateTerms[0] === '2026-03-04', `Expected 2026-03-04, got ${r.dateTerms[0]}`);
+}
+
 // ─── Summary ───
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
