@@ -6,7 +6,7 @@ const Database = require('better-sqlite3');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { SCHEMA, openDb, getFileMeta, deleteFileChunks, insertChunks, search, getAdjacentChunks, getStats, getAllFilePaths } = require('../lib/store');
+const { SCHEMA, openDb, getFileMeta, deleteFileChunks, insertChunks, search, getAdjacentChunks, getStats, getDetailedStats, getAllFilePaths } = require('../lib/store');
 
 let passed = 0, failed = 0;
 
@@ -33,6 +33,8 @@ function createInMemoryDb() {
   try { db.exec('ALTER TABLE chunks ADD COLUMN value_score REAL'); } catch (_) {}
   try { db.exec('ALTER TABLE chunks ADD COLUMN value_label TEXT'); } catch (_) {}
   try { db.exec('ALTER TABLE chunks ADD COLUMN content_updated_at TEXT'); } catch (_) {}
+  try { db.exec('ALTER TABLE chunks ADD COLUMN source_type TEXT DEFAULT \'indexed\''); } catch (_) {}
+  try { db.exec('ALTER TABLE chunks ADD COLUMN domain TEXT DEFAULT \'general\''); } catch (_) {}
   try {
     db.exec('DROP TRIGGER IF EXISTS chunks_au');
     db.exec(`CREATE TRIGGER IF NOT EXISTS chunks_au AFTER UPDATE OF content, heading, entities ON chunks BEGIN
@@ -351,6 +353,91 @@ console.log('Test 8: getAllFilePaths');
   assert(!afterDelete.includes('bravo.md'), 'Should not include deleted bravo.md');
 
   db.close();
+}
+
+// ─── Test: insertChunks with source_type and domain ───
+console.log('Test: insertChunks with source_type and domain');
+{
+  const db = createInMemoryDb();
+  const chunks = [
+    { heading: 'A', content: 'health vitamin supplement blood labs', lineStart: 1, lineEnd: 2, entities: [], domain: 'health' },
+    { heading: 'B', content: 'crypto wallet swap', lineStart: 3, lineEnd: 4, entities: [], domain: 'crypto' },
+  ];
+  insertChunks(db, 'test.md', 100, chunks, null, undefined, 'manual');
+  const rows = db.prepare('SELECT source_type, domain FROM chunks ORDER BY id').all();
+  assert(rows.length === 2, `Should have 2 chunks, got ${rows.length}`);
+  assert(rows[0].source_type === 'manual', `First chunk source_type should be manual, got ${rows[0].source_type}`);
+  assert(rows[0].domain === 'health', `First chunk domain should be health, got ${rows[0].domain}`);
+  assert(rows[1].domain === 'crypto', `Second chunk domain should be crypto, got ${rows[1].domain}`);
+  db.close();
+}
+
+// ─── Test: search with domain filter ───
+console.log('Test: search with domain filter');
+{
+  const db = createInMemoryDb();
+  insertChunks(db, 'a.md', 100, [
+    { heading: 'H', content: 'vitamin supplement dose', lineStart: 1, lineEnd: 1, entities: [], domain: 'health' },
+  ], null, undefined, 'indexed');
+  insertChunks(db, 'b.md', 200, [
+    { heading: 'C', content: 'vitamin water brand', lineStart: 1, lineEnd: 1, entities: [], domain: 'general' },
+  ], null, undefined, 'indexed');
+  const all = search(db, 'vitamin', { skipTracking: true });
+  assert(all.length === 2, `Should find 2 without filter, got ${all.length}`);
+  const filtered = search(db, 'vitamin', { domain: 'health', skipTracking: true });
+  assert(filtered.length === 1, `Should find 1 with health filter, got ${filtered.length}`);
+  assert(filtered[0].domain === 'health', 'Filtered result should be health domain');
+  db.close();
+}
+
+// ─── Test: search with sourceType filter ───
+console.log('Test: search with sourceType filter');
+{
+  const db = createInMemoryDb();
+  insertChunks(db, 'a.md', 100, [
+    { heading: 'H', content: 'test manual content', lineStart: 1, lineEnd: 1, entities: [] },
+  ], null, undefined, 'manual');
+  insertChunks(db, 'b.md', 200, [
+    { heading: 'I', content: 'test indexed content', lineStart: 1, lineEnd: 1, entities: [] },
+  ], null, undefined, 'indexed');
+  const manual = search(db, 'test', { sourceType: 'manual', skipTracking: true });
+  assert(manual.length === 1, `Should find 1 manual, got ${manual.length}`);
+  assert(manual[0].source_type === 'manual', 'Should be manual source');
+  db.close();
+}
+
+// ─── Test: getDetailedStats ───
+console.log('Test: getDetailedStats');
+{
+  const db = createInMemoryDb();
+  insertChunks(db, 'a.md', 100, [
+    { heading: 'H', content: 'some content here', lineStart: 1, lineEnd: 1, entities: [], domain: 'health' },
+  ], null, undefined, 'manual');
+  db.prepare('UPDATE chunks SET stale = 1 WHERE id = 1').run();
+  const stats = getDetailedStats(db);
+  assert(stats.fileCount === 1, `fileCount should be 1, got ${stats.fileCount}`);
+  assert(stats.chunkCount === 1, `chunkCount should be 1, got ${stats.chunkCount}`);
+  assert(stats.staleCount === 1, `staleCount should be 1, got ${stats.staleCount}`);
+  assert(Array.isArray(stats.chunkTypeDist), 'chunkTypeDist should be array');
+  assert(Array.isArray(stats.sourceTypeDist), 'sourceTypeDist should be array');
+  assert(Array.isArray(stats.domainDist), 'domainDist should be array');
+  db.close();
+}
+
+// ─── Test: openDb creates source_type and domain columns ───
+console.log('Test: openDb migration — source_type and domain columns');
+{
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sme-store-migration-'));
+  try {
+    const db = openDb(tmpDir);
+    const info = db.prepare("PRAGMA table_info(chunks)").all();
+    const colNames = info.map(c => c.name);
+    assert(colNames.includes('source_type'), 'Should have source_type column');
+    assert(colNames.includes('domain'), 'Should have domain column');
+    db.close();
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
 }
 
 // ─── Summary ───
