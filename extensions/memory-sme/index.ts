@@ -82,6 +82,7 @@ const memoryPlugin = {
     const autoIndex = cfg.autoIndex !== false;
     const autoRecall = cfg.autoRecall !== false;
     const autoRecallMaxTokens = cfg.autoRecallMaxTokens ?? 1500;
+    const autoRecallMinScore = cfg.autoRecallMinScore ?? 0.4;
     const autoCapture = cfg.autoCapture !== false;
     const captureMaxChars = cfg.captureMaxChars ?? 500;
 
@@ -247,14 +248,33 @@ const memoryPlugin = {
           _lastRecallPrompt = cleanPrompt;
           _lastRecallTime = now;
 
+          // Filter out low-score chunks to reduce context noise
+          const preFilterCount = result.chunks.length;
+          result.chunks = result.chunks.filter((c: any) => (c.cilScore ?? 1.0) >= autoRecallMinScore);
+
           if (!result.text || result.chunks.length === 0) {
+            if (preFilterCount > 0) {
+              api.logger?.info?.(
+                `memory-sme: all ${preFilterCount} chunks below score threshold (${autoRecallMinScore}), skipping injection`
+              );
+            }
             _lastRecallResult = undefined;
             return;
           }
 
-          api.logger?.info?.(
-            `memory-sme: injecting ${result.chunks.length} chunks (${result.tokenEstimate} tokens)`
-          );
+          // Regenerate text from filtered chunks if any were removed
+          if (result.chunks.length < preFilterCount) {
+            const { formatContext } = require(require('path').join(workspace, '..', 'Structured-Memory-Engine', 'lib', 'context.js'));
+            result.text = formatContext(result.chunks, []);
+            result.tokenEstimate = Math.ceil(result.text.length / 3.5);
+            api.logger?.info?.(
+              `memory-sme: filtered ${preFilterCount - result.chunks.length} low-score chunks, injecting ${result.chunks.length} (${result.tokenEstimate} tokens)`
+            );
+          } else {
+            api.logger?.info?.(
+              `memory-sme: injecting ${result.chunks.length} chunks (${result.tokenEstimate} tokens)`
+            );
+          }
 
           _lastRecallResult = { prependContext: result.text };
           return _lastRecallResult;

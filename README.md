@@ -6,7 +6,7 @@
 npm install structured-memory-engine
 ```
 
-Persistent, self-maintaining memory that runs locally. No API calls, no cloud, no ongoing cost. **1,369 tests. <1ms recall. $0/month forever.**
+Persistent, self-maintaining memory that runs locally. No API calls, no cloud, no ongoing cost. **1,451 tests. 5ms recall. $0/month forever.**
 
 <!-- TODO: Add demo GIF here -->
 <!-- ![SME Demo](assets/demo.gif) -->
@@ -35,7 +35,7 @@ That's it. No API keys, no config, no cloud. Everything runs locally.
 const sme = require('structured-memory-engine').create({ workspace: '.' });
 sme.index();
 sme.context('What did Sarah say about the migration plan?');
-// → Ranked, cited, confidence-scored context from 60+ meeting transcripts in <1ms
+// → Ranked, cited, confidence-scored context from 60+ meeting transcripts in ~5ms
 ```
 
 ## The Problem
@@ -120,7 +120,7 @@ Measured on Apple M3 Max, 69GB RAM, Node v24.13.0. Run `npm run bench` to verify
 | Reflect cycle | 500 chunks | 3ms | — | All 5 phases |
 | DB overhead | 100 files (100 KB src) | 368 KB | — | 3.7x source size |
 
-CIL context is the critical path — it runs on every agent turn. At <1ms average, it adds negligible latency to any agent interaction.
+CIL context is the critical path — it runs on every agent turn. At ~5ms average on 2,500+ chunks, it adds negligible latency to any agent interaction.
 
 ## Quickstart (60 seconds)
 
@@ -557,6 +557,11 @@ SME is built in layers. Each layer is independently useful:
 | v6.6-6.7 | **Semantic** | Semantic embeddings wired into recall pipeline, rescue pass for FTS-invisible chunks |
 | v6.8 | **Intent** | Temporal resolution, query intent detection, rule-chunk penalty for factual queries |
 | v6.9 | **Precision** | Rescue ordering fix, always-OR FTS, self-reference penalty, percentile normalization — 5.4→9.2/10 benchmark |
+| v6.10 | **Onboarding** | `sme init` command, memory pollution fix, entity stoplist, double-tag fix |
+| v7.0-7.2 | **Quality** | Heading-aware embeddings, recall tuning, diversity caps, freshness scoring |
+| v8.0 | **Recall Quality** | Synonym expansion, result diversity, recall benchmarking, memory promotion — 9.1/10 benchmark |
+| v8.1 | **Metadata** | Source type detection, domain labels, decision signals, staleness alerts |
+| v8.2 | **Temporal** | Keyword expansion for vague temporal queries, FTS-empty fallback, weekday resolution |
 
 ## API Reference
 
@@ -621,7 +626,7 @@ sme promote [--limit N] [--dry-run]
 ## Testing
 
 ```bash
-npm test  # 30 suites, 1,369 tests
+npm test  # 30 suites, 1,451 tests
 ```
 
 ## Acknowledgments
