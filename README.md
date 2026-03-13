@@ -1,15 +1,21 @@
-# Structured Memory Engine
+<p align="center">
+  <img src="assets/banner.jpg" width="600" alt="Structured Memory Engine">
+</p>
 
-**Your AI agent forgets everything between sessions. SME fixes that.**
+<p align="center">
+  <strong>Your AI agent forgets everything between sessions. SME fixes that.</strong>
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/structured-memory-engine"><img src="https://img.shields.io/npm/v/structured-memory-engine?color=green" alt="npm"></a>
+  <img src="https://img.shields.io/badge/tests-1%2C451-brightgreen" alt="tests">
+  <img src="https://img.shields.io/badge/recall-5ms-blue" alt="recall">
+  <img src="https://img.shields.io/badge/cost-%240%2Fmo-orange" alt="cost">
+</p>
 
 ```bash
 npm install structured-memory-engine
 ```
-
-Persistent, self-maintaining memory that runs locally. No API calls, no cloud, no ongoing cost. **1,451 tests. 5ms recall. $0/month forever.**
-
-<!-- TODO: Add demo GIF here -->
-<!-- ![SME Demo](assets/demo.gif) -->
 
 ## Quick Start (30 seconds)
 
