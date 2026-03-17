@@ -673,6 +673,47 @@ console.log('Test 28: General domain chunks still compared');
   db.close();
 }
 
+// ─── Test 29: runReflectCycle auto-generates entity pages when enabled ───
+console.log('Test 29: runReflectCycle generates entity pages when config.entityPages.enabled');
+{
+  const db = createDb();
+  const id1 = insertChunk(db, { content: 'Tom reviewed PR', heading: 'Reviews', createdAt: daysAgo(2) });
+  const id2 = insertChunk(db, { content: 'Tom deployed staging', heading: 'Deploys', createdAt: daysAgo(1) });
+  // Set entities column directly (insertChunk hardcodes '[]')
+  db.prepare('UPDATE chunks SET entities = ? WHERE id = ?').run(JSON.stringify(['Tom', 'Nexus']), id1);
+  db.prepare('UPDATE chunks SET entities = ? WHERE id = ?').run(JSON.stringify(['Tom']), id2);
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sme-reflect-ep-'));
+  const config = { entityPages: { enabled: true, minMentions: 2 } };
+  const result = runReflectCycle(db, { config, workspace: tmpDir });
+
+  assert(result.entityPages.generated >= 1, `Expected at least 1 entity page, got ${result.entityPages.generated}`);
+  const pageFile = path.join(tmpDir, '.memory', 'entities', 'tom.md');
+  assert(fs.existsSync(pageFile), 'Entity page file should exist on disk');
+
+  fs.rmSync(tmpDir, { recursive: true });
+  db.close();
+}
+
+// ─── Test 30: runReflectCycle skips entity pages when disabled ───
+console.log('Test 30: runReflectCycle skips entity pages when config.entityPages.enabled is false');
+{
+  const db = createDb();
+  const id1 = insertChunk(db, { content: 'Alex built feature', createdAt: daysAgo(1) });
+  const id2 = insertChunk(db, { content: 'Alex fixed bug', createdAt: daysAgo(2) });
+  db.prepare('UPDATE chunks SET entities = ? WHERE id = ?').run(JSON.stringify(['Alex']), id1);
+  db.prepare('UPDATE chunks SET entities = ? WHERE id = ?').run(JSON.stringify(['Alex']), id2);
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sme-reflect-ep-'));
+  const result = runReflectCycle(db, { config: {}, workspace: tmpDir });
+
+  assert(result.entityPages.generated === 0, `Expected 0 entity pages when disabled, got ${result.entityPages.generated}`);
+  assert(!fs.existsSync(path.join(tmpDir, '.memory', 'entities')), 'Entity pages directory should not exist');
+
+  fs.rmSync(tmpDir, { recursive: true });
+  db.close();
+}
+
 // ─── Summary ───
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
