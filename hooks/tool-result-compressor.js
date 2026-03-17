@@ -29,7 +29,7 @@ const NPM_WARN_RE = /^npm (WARN|notice).*$/gm;
 const PIP_WARN_RE = /^(WARNING: |DEPRECATION: ).*$/gm;
 
 // Node.js ExperimentalWarning
-const NODE_EXPERIMENTAL_RE = /^\(node:\d+\) \[?ExperimentalWarning.*$/gm;
+const NODE_EXPERIMENTAL_RE = /^\(node:\d+\) (?:\[[\w]+\] )?(?:\[?ExperimentalWarning|ExperimentalWarning).*$/gm;
 
 // Box-drawing characters (common Unicode box-drawing block U+2500–U+257F + curved variants)
 const BOX_DRAWING_RE = /[─━│┃┄┅┆┇┈┉┊┋┌┍┎┏┐┑┒┓└┕┖┗┘┙┚┛├┝┞┟┠┡┢┣┤┥┦┧┨┩┪┫┬┭┮┯┰┱┲┳┴┵┶┷┸┹┺┻┼┽┾┿╀╁╂╃╄╅╆╇╈╉╊╋╌╍╎╏╭╮╯╰╱╲╳╴╵╶╷╸╹╺╻╼╽╾╿]/g;
@@ -54,10 +54,11 @@ function cleanText(text) {
   out = out.replace(BOX_DRAWING_RE, '');
   out = out.replace(EXCESS_BLANK_RE, '\n\n');
 
-  // Truncate
+  // Truncate — reserve space for the marker so total output stays within MAX_LENGTH
   if (out.length > MAX_LENGTH) {
     const excess = out.length - MAX_LENGTH;
-    out = out.slice(0, MAX_LENGTH) + `\n[...truncated ${excess} chars...]`;
+    const marker = `\n[...truncated ${excess} chars...]`;
+    out = out.slice(0, MAX_LENGTH - marker.length) + marker;
   }
 
   const changed = out !== text;
@@ -92,10 +93,25 @@ function toolResultCompressor(message) {
       changed = c;
       result = cleaned;
     } else if (Array.isArray(content)) {
+      let cumulativeLength = 0;
+      let budgetExhausted = false;
       const newParts = content.map(part => {
         if (part && part.type === 'text' && typeof part.text === 'string') {
+          if (budgetExhausted) {
+            changed = true;
+            return { ...part, text: '[...truncated: budget exhausted...]' };
+          }
           const { cleaned, changed: c } = cleanText(part.text);
           if (c) changed = true;
+          cumulativeLength += cleaned.length;
+          if (cumulativeLength > MAX_LENGTH) {
+            budgetExhausted = true;
+            changed = true;
+            const overage = cumulativeLength - MAX_LENGTH;
+            const trimmed = cleaned.slice(0, cleaned.length - overage);
+            const marker = `\n[...truncated ${overage} chars across parts...]`;
+            return { ...part, text: trimmed + marker };
+          }
           return c ? { ...part, text: cleaned } : part;
         }
         return part;
