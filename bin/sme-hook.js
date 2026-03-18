@@ -29,7 +29,8 @@ try {
     const result = indexWorkspace(db, workspace, { include, fileTypeDefaults });
     log(`Indexed: ${result.indexed} | Skipped: ${result.skipped} | Total: ${result.total} | Cleaned: ${result.cleaned}`);
   } else if (command === 'reflect') {
-    const result = runReflectCycle(db);
+    const config = loadConfig(workspace);
+    const result = runReflectCycle(db, { config, workspace });
     log(`Reflect: decayed=${result.decay.decayed} reinforced=${result.reinforce.reinforced} stale=${result.stale.marked} contradictions=${result.contradictions.newFlags} archived=${result.prune.archived}`);
   }
 } catch (err) {

@@ -673,6 +673,73 @@ console.log('Test 28: General domain chunks still compared');
   db.close();
 }
 
+// ─── Test 29: runReflectCycle auto-generates entity pages when enabled ───
+console.log('Test 29: runReflectCycle generates entity pages when config.entityPages.enabled');
+{
+  const db = createDb();
+  const id1 = insertChunk(db, { content: 'Tom reviewed PR', heading: 'Reviews', createdAt: daysAgo(2) });
+  const id2 = insertChunk(db, { content: 'Tom deployed staging', heading: 'Deploys', createdAt: daysAgo(1) });
+  // Set entities column directly (insertChunk hardcodes '[]')
+  db.prepare('UPDATE chunks SET entities = ? WHERE id = ?').run(JSON.stringify(['Tom', 'Nexus']), id1);
+  db.prepare('UPDATE chunks SET entities = ? WHERE id = ?').run(JSON.stringify(['Tom']), id2);
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sme-reflect-ep-'));
+  const config = { entityPages: { enabled: true, minMentions: 2 } };
+  const result = runReflectCycle(db, { config, workspace: tmpDir });
+
+  assert(result.entityPages.generated >= 1, `Expected at least 1 entity page, got ${result.entityPages.generated}`);
+  const pageFile = path.join(tmpDir, '.memory', 'entities', 'tom.md');
+  assert(fs.existsSync(pageFile), 'Entity page file should exist on disk');
+
+  fs.rmSync(tmpDir, { recursive: true });
+  db.close();
+}
+
+// ─── Test 30: runReflectCycle skips entity pages when disabled ───
+console.log('Test 30: runReflectCycle skips entity pages when config.entityPages.enabled is false');
+{
+  const db = createDb();
+  const id1 = insertChunk(db, { content: 'Alex built feature', createdAt: daysAgo(1) });
+  const id2 = insertChunk(db, { content: 'Alex fixed bug', createdAt: daysAgo(2) });
+  db.prepare('UPDATE chunks SET entities = ? WHERE id = ?').run(JSON.stringify(['Alex']), id1);
+  db.prepare('UPDATE chunks SET entities = ? WHERE id = ?').run(JSON.stringify(['Alex']), id2);
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sme-reflect-ep-'));
+  const result = runReflectCycle(db, { config: {}, workspace: tmpDir });
+
+  assert(result.entityPages.generated === 0, `Expected 0 entity pages when disabled, got ${result.entityPages.generated}`);
+  assert(!fs.existsSync(path.join(tmpDir, '.memory', 'entities')), 'Entity pages directory should not exist');
+
+  fs.rmSync(tmpDir, { recursive: true });
+  db.close();
+}
+
+// ─── Test: Config default intervalHours exists and equals 24 ───
+console.log('Test: Config default intervalHours = 24');
+{
+  const { DEFAULTS } = require('../lib/config');
+  assert(DEFAULTS.reflect.intervalHours === 24, `Expected intervalHours=24, got ${DEFAULTS.reflect.intervalHours}`);
+  assert(DEFAULTS.reflect.autoReflect === true, `Expected autoReflect=true, got ${DEFAULTS.reflect.autoReflect}`);
+}
+
+// ─── Test: Config merge respects user intervalHours override ───
+console.log('Test: Config merge respects intervalHours override');
+{
+  const { loadConfig } = require('../lib/config');
+  const tmpWs = fs.mkdtempSync(path.join(os.tmpdir(), 'sme-cfg-'));
+  const memDir = path.join(tmpWs, '.memory');
+  fs.mkdirSync(memDir, { recursive: true });
+  fs.writeFileSync(path.join(memDir, 'config.json'), JSON.stringify({ reflect: { intervalHours: 12 } }));
+
+  const cfg = loadConfig(tmpWs);
+  assert(cfg.reflect.intervalHours === 12, `Expected intervalHours=12, got ${cfg.reflect.intervalHours}`);
+  // Other reflect defaults should still be present
+  assert(cfg.reflect.autoReflect === true, `Expected autoReflect=true after merge, got ${cfg.reflect.autoReflect}`);
+  assert(cfg.reflect.halfLifeDays === 120, `Expected halfLifeDays=120 after merge, got ${cfg.reflect.halfLifeDays}`);
+
+  fs.rmSync(tmpWs, { recursive: true });
+}
+
 // ─── Summary ───
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
