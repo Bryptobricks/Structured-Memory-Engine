@@ -714,6 +714,32 @@ console.log('Test 30: runReflectCycle skips entity pages when config.entityPages
   db.close();
 }
 
+// ─── Test: Config default intervalHours exists and equals 24 ───
+console.log('Test: Config default intervalHours = 24');
+{
+  const { DEFAULTS } = require('../lib/config');
+  assert(DEFAULTS.reflect.intervalHours === 24, `Expected intervalHours=24, got ${DEFAULTS.reflect.intervalHours}`);
+  assert(DEFAULTS.reflect.autoReflect === true, `Expected autoReflect=true, got ${DEFAULTS.reflect.autoReflect}`);
+}
+
+// ─── Test: Config merge respects user intervalHours override ───
+console.log('Test: Config merge respects intervalHours override');
+{
+  const { loadConfig } = require('../lib/config');
+  const tmpWs = fs.mkdtempSync(path.join(os.tmpdir(), 'sme-cfg-'));
+  const memDir = path.join(tmpWs, '.memory');
+  fs.mkdirSync(memDir, { recursive: true });
+  fs.writeFileSync(path.join(memDir, 'config.json'), JSON.stringify({ reflect: { intervalHours: 12 } }));
+
+  const cfg = loadConfig(tmpWs);
+  assert(cfg.reflect.intervalHours === 12, `Expected intervalHours=12, got ${cfg.reflect.intervalHours}`);
+  // Other reflect defaults should still be present
+  assert(cfg.reflect.autoReflect === true, `Expected autoReflect=true after merge, got ${cfg.reflect.autoReflect}`);
+  assert(cfg.reflect.halfLifeDays === 120, `Expected halfLifeDays=120 after merge, got ${cfg.reflect.halfLifeDays}`);
+
+  fs.rmSync(tmpWs, { recursive: true });
+}
+
 // ─── Summary ───
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
