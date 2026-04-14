@@ -307,6 +307,27 @@ console.log('Test 18: async methods return promises');
   fs.rmSync(ws, { recursive: true });
 }
 
+// ─── Test 19: filterMetadataNoise config can be disabled ───
+console.log('Test 19: filterMetadataNoise config can be disabled');
+{
+  const ws = tmpWorkspace();
+  fs.mkdirSync(path.join(ws, '.memory'), { recursive: true });
+  fs.writeFileSync(path.join(ws, '.memory', 'config.json'), JSON.stringify({
+    filterMetadataNoise: false,
+  }));
+  fs.mkdirSync(path.join(ws, 'memory'), { recursive: true });
+  fs.writeFileSync(
+    path.join(ws, 'memory', '2026-02-20.md'),
+    '# Noise\nsession_id: abc123\nmessage_id: 42\nchat_id: 7\nprompt_tokens: 500\ncompletion_tokens: 200\n'
+  );
+  const engine = create({ workspace: ws });
+  await engine.index({ force: true });
+  const stats = engine.status();
+  assert(stats.chunkCount > 0, 'Metadata-heavy chunk should still be indexed when filterMetadataNoise=false');
+  engine.close();
+  fs.rmSync(ws, { recursive: true });
+}
+
 }
 
 main().then(() => {

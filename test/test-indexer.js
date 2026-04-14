@@ -106,6 +106,10 @@ console.log('Test 3: pushChunk splitting');
   for (const chunk of big) {
     assert(chunk.heading === 'Big Section', `Split chunk should preserve heading, got: ${chunk.heading}`);
   }
+
+  // Metadata-heavy blocks should be dropped during chunking
+  const noisy = chunkMarkdown(`# Session\nsession_id: abc123\nmessage_id: 987\nchat_id: 555\nprompt_tokens: 123\ncompletion_tokens: 456`);
+  assert(noisy.length === 0, `Metadata-heavy chunk should be dropped, got ${noisy.length}`);
 }
 
 // ─── Test 4: discoverFiles ───

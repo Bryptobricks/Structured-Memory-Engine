@@ -227,6 +227,15 @@ console.log('Test 10: budgetChunks');
   assert(truncated.length === 1, `Should include truncated chunk, got ${truncated.length}`);
   assert(truncated[0].truncated === true, 'Chunk should be marked truncated');
   assert(truncated[0].content.endsWith('…'), 'Truncated content should end with ellipsis');
+
+  // Oversized top chunk should not prevent later smaller chunks from fitting
+  const mixed = [
+    { content: 'Y'.repeat(1000), chunkType: 'fact', confidence: 1.0, filePath: 'y.md', lineStart: 1 },
+    { content: 'short useful chunk', chunkType: 'fact', confidence: 1.0, filePath: 'z.md', lineStart: 1 },
+  ];
+  const afterSkip = budgetChunks(mixed, 120);
+  assert(afterSkip.length === 1, `Should keep later small chunk when top chunk is too large, got ${afterSkip.length}`);
+  assert(afterSkip[0].content === 'short useful chunk', 'Expected smaller later chunk to survive budget pass');
 }
 
 // ─── Test 11: cilScore delegates to shared scorer ───
@@ -474,6 +483,18 @@ console.log('Test 22: score() applies dynamic file weight to daily files');
   // The boost should be multiplicative — today gets 2.5x vs 1.0x
   const ratio = scoreToday / scoreOld;
   assert(ratio > 2.0, `Score ratio should be >2.0x, got ${ratio.toFixed(2)}`);
+}
+
+// ─── Test 23: score() penalizes metadata-heavy chunks ───
+console.log('Test 23: score() penalizes metadata-heavy chunks');
+{
+  const base = { confidence: 1.0, created_at: new Date().toISOString(), chunk_type: 'fact', file_weight: 1.0, _normalizedFts: 0.8 };
+  const prose = { ...base, content: 'Redis cache TTL is 120 seconds in production for lower p99 latency.' };
+  const metadata = { ...base, content: 'session_id: abc123\nmessage_id: 42\nchat_id: 7\nprompt_tokens: 500\ncompletion_tokens: 200' };
+
+  const proseScore = score(prose, nowMs, CIL_PROFILE);
+  const metadataScore = score(metadata, nowMs, CIL_PROFILE);
+  assert(proseScore > metadataScore, `Normal prose (${proseScore.toFixed(3)}) should beat metadata-heavy chunk (${metadataScore.toFixed(3)})`);
 }
 
 // ─── Summary ───

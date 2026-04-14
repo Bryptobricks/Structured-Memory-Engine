@@ -8,10 +8,27 @@
 
 import { Type } from "@sinclair/typebox";
 import { createRequire } from "module";
-import { readFileSync } from "fs";
-import { resolve } from "path";
+import { existsSync } from "fs";
+import { dirname, resolve } from "path";
+import { fileURLToPath } from "url";
 
 const require = createRequire(import.meta.url);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+function requireSme(subpath?: string) {
+  const packageId = subpath ? `structured-memory-engine/${subpath}` : "structured-memory-engine";
+  try {
+    return require(packageId);
+  } catch (err) {
+    const repoRoot = resolve(__dirname, "..", "..");
+    const fallbackPath = subpath ? resolve(repoRoot, subpath) : repoRoot;
+    if (existsSync(fallbackPath) || existsSync(`${fallbackPath}.js`)) {
+      return require(fallbackPath);
+    }
+    throw err;
+  }
+}
 
 // Patterns that indicate content worth capturing automatically
 const CAPTURE_TRIGGERS = [
@@ -76,7 +93,7 @@ const memoryPlugin = {
   description: "Structured Memory Engine — FTS5, confidence scoring, entity graph, contradiction detection",
   kind: "memory" as const,
 
-  register(api: any) {
+  async register(api: any) {
     const cfg = api.pluginConfig ?? {};
     const workspace = cfg.workspace ?? api.resolvePath?.(".") ?? process.cwd();
     const autoIndex = cfg.autoIndex !== false;
@@ -85,7 +102,7 @@ const memoryPlugin = {
     const autoCapture = cfg.autoCapture !== false;
     const captureMaxChars = cfg.captureMaxChars ?? 500;
 
-    const sme = require("structured-memory-engine");
+    const sme = requireSme();
     const engine = sme.create({ workspace });
 
     // Auto-index on startup (engine.index() is async in SME v7+)
@@ -100,11 +117,11 @@ const memoryPlugin = {
 
     // Auto-reflect on startup (once per day max, unless disabled via config)
     try {
-      const { loadConfig } = require("structured-memory-engine/lib/config");
+      const { loadConfig } = requireSme("lib/config");
       const smeConfig = loadConfig(workspace);
       const autoReflect = smeConfig?.reflect?.autoReflect !== false;
       if (!autoReflect) throw new Error("disabled by config");
-      const { getLastReflectTime } = require("structured-memory-engine/lib/reflect");
+      const { getLastReflectTime } = requireSme("lib/reflect");
       const lastReflect = getLastReflectTime(workspace);
       const hoursSince = (Date.now() - lastReflect) / (1000 * 60 * 60);
       if (hoursSince >= 24) {

@@ -27,6 +27,7 @@ console.log('Test 1: Returns defaults when no config file exists');
   assert(config.include.length === 0, 'include should be empty');
   assert(Array.isArray(config.includeGlobs), 'includeGlobs should be array');
   assert(config.includeGlobs.length === 0, 'includeGlobs should be empty');
+  assert(config.filterMetadataNoise === true, `Expected filterMetadataNoise=true, got ${config.filterMetadataNoise}`);
   fs.rmSync(ws, { recursive: true });
 }
 
@@ -37,12 +38,14 @@ console.log('Test 2: Merges user config over defaults');
   fs.writeFileSync(path.join(ws, '.memory', 'config.json'), JSON.stringify({
     owner: 'TestUser',
     include: ['CLAUDE.md'],
+    filterMetadataNoise: false,
   }), 'utf-8');
   const config = loadConfig(ws);
   assert(config.owner === 'TestUser', `Expected owner TestUser, got ${config.owner}`);
   assert(config.include.length === 1, `Expected 1 include, got ${config.include.length}`);
   assert(config.include[0] === 'CLAUDE.md', `Expected CLAUDE.md, got ${config.include[0]}`);
   assert(config.includeGlobs.length === 0, 'includeGlobs should default to empty');
+  assert(config.filterMetadataNoise === false, 'Expected filterMetadataNoise override to persist');
   fs.rmSync(ws, { recursive: true });
 }
 

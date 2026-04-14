@@ -2,6 +2,21 @@
 
 All notable changes to Structured Memory Engine will be documented in this file.
 
+## [7.3.0] - 2026-04-14
+
+### Added
+- **Metadata-noise filter** (`lib/noise.js`): new `metadataDensityPenalty()` and `isMetadataHeavy()` detect chunks dominated by operational metadata (session IDs, token counts, YAML frontmatter, code-block envelopes, "Conversation info" blocks).
+- Three-stage filtering:
+  1. **Indexing** — metadata-heavy chunks skipped at chunk time (`lib/indexer.js`)
+  2. **Retrieval** — metadata-heavy rows filtered post-FTS (`lib/retrieve.js`)
+  3. **Scoring** — surviving metadata penalized via final-score multiplier (`lib/scoring.js`)
+- Config flag `filterMetadataNoise` (default `true`) threaded through recall/context/index/remember paths.
+- `getChunksByExactFile(db, filePath)` in `lib/store.js` — exact file-path match for priority file injection; prevents substring false positives (e.g. `archive-open-loops.md` no longer matches `open-loops.md` injection).
+- Extensions: `extensions/memory-sme/index.ts` now falls back to repo-root require when the npm package isn't resolvable.
+
+### Tests
+- 6 new tests covering: config default, disable flag, exact file matching, metadata chunk dropping at index time, retrieval filtering, scoring penalty application.
+
 ## [7.0.0] - 2026-03-03
 
 ### Changed

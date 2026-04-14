@@ -223,6 +223,25 @@ console.log('Test 8: Shared pipeline ensures both callers see identical FTS resu
   db.close();
 }
 
+// ─── Test 9: Metadata-heavy chunks are filtered from retrieval ───
+console.log('Test 9: Metadata-heavy chunks are filtered from retrieval');
+{
+  const db = createDb();
+  const recent = daysAgo(1);
+  insertChunks(db, 'memory/noise.md', 1000, [
+    { heading: 'Noise', content: 'session_id: abc123\nmessage_id: 42\nchat_id: 7\nprompt_tokens: 500\ncompletion_tokens: 200', lineStart: 1, lineEnd: 5, entities: [] },
+  ], recent);
+  insertChunks(db, 'memory/real.md', 1000, [
+    { heading: 'Real', content: 'Redis cache TTL reduced to 120 seconds for latency stability', lineStart: 1, lineEnd: 5, entities: [] },
+  ], recent);
+
+  const result = retrieveChunks(db, 'Redis cache TTL', { limit: 30 });
+  assert(result.rows.length >= 1, `Expected at least 1 row, got ${result.rows.length}`);
+  const noiseHit = result.rows.find(r => r.file_path === 'memory/noise.md');
+  assert(!noiseHit, 'Metadata-heavy chunk should be filtered out of retrieval results');
+  db.close();
+}
+
 // ─── Summary ───
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

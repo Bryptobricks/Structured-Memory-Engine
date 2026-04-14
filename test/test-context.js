@@ -661,6 +661,21 @@ console.log('Test 32: Priority file injection — dedup when chunks already in F
   db.close();
 }
 
+// ─── Test 32b: Priority file injection uses exact file match ───
+console.log('Test 32b: Priority file injection uses exact file match');
+{
+  const db = createDb();
+  insertChunk(db, { content: 'Open loops exact file should surface for action queries', filePath: 'memory/open-loops.md', chunkType: 'action_item', confidence: 1.0, createdAt: daysAgo(1) });
+  insertChunk(db, { content: 'Decoy file should not be injected just because the name contains open-loops', filePath: 'memory/archive-open-loops.md', chunkType: 'action_item', confidence: 1.0, createdAt: daysAgo(1) });
+
+  const result = getRelevantContext(db, 'What should I work on next?');
+  const exactHit = result.chunks.some(c => c.filePath === 'memory/open-loops.md');
+  const decoyHit = result.chunks.some(c => c.filePath === 'memory/archive-open-loops.md');
+  assert(exactHit, 'Exact open-loops file should be injected');
+  assert(!decoyHit, 'Substring-matching decoy should not be injected');
+  db.close();
+}
+
 // ─── Test 33: isRuleChunk — strong rule detection ───
 console.log('Test 33: isRuleChunk — strong rule patterns detected');
 {
