@@ -497,6 +497,75 @@ console.log('Test 23: score() penalizes metadata-heavy chunks');
   assert(proseScore > metadataScore, `Normal prose (${proseScore.toFixed(3)}) should beat metadata-heavy chunk (${metadataScore.toFixed(3)})`);
 }
 
+// ─── F5: Entity Mention Scoring ───
+const { entityMentionScore } = require('../lib/scoring');
+
+console.log('Test 24: entityMentionScore — zero when no query entities');
+{
+  const chunk = { entities: JSON.stringify(['sarah chen', 'movement labs']), content: 'Sarah Chen leads Movement Labs' };
+  assert(entityMentionScore(chunk, [], new Map()) === 0, 'empty queryEntities should return 0');
+  assert(entityMentionScore(chunk, null, new Map()) === 0, 'null queryEntities should return 0');
+  assert(entityMentionScore(chunk, ['sarah chen'], null) === 0, 'null map should return 0');
+  assert(entityMentionScore(chunk, ['sarah chen'], new Map()) === 0, 'empty map should return 0');
+}
+
+console.log('Test 25: entityMentionScore — log-scaled mention boost');
+{
+  const chunk = { entities: JSON.stringify(['sarah chen']), content: 'Sarah Chen note' };
+  const lowMap = new Map([['sarah chen', { mentionCount: 3, coEntities: {} }]]);
+  const highMap = new Map([['sarah chen', { mentionCount: 50, coEntities: {} }]]);
+  const low = entityMentionScore(chunk, ['sarah chen'], lowMap);
+  const high = entityMentionScore(chunk, ['sarah chen'], highMap);
+  assert(low > 0, `low-mention entity should score > 0, got ${low}`);
+  assert(high > low, `high-mention (${high.toFixed(3)}) should exceed low-mention (${low.toFixed(3)})`);
+  assert(high <= 1.0, `score capped at 1.0, got ${high}`);
+}
+
+console.log('Test 26: entityMentionScore — co-occurrence bonus');
+{
+  // Chunk mentions both "sarah chen" AND "nexus" (a known co-entity of sarah)
+  const chunk = { entities: JSON.stringify(['sarah chen', 'nexus']), content: 'Sarah Chen at Nexus' };
+  const noCoMap = new Map([['sarah chen', { mentionCount: 5, coEntities: {} }]]);
+  const coMap = new Map([['sarah chen', { mentionCount: 5, coEntities: { 'nexus': 10 } }]]);
+  const without = entityMentionScore(chunk, ['sarah chen'], noCoMap);
+  const withCo = entityMentionScore(chunk, ['sarah chen'], coMap);
+  assert(withCo > without, `co-occurring entity should boost score: with=${withCo.toFixed(3)} vs without=${without.toFixed(3)}`);
+}
+
+console.log('Test 27: entityMentionScore — chunk without query entity returns 0');
+{
+  const chunk = { entities: JSON.stringify(['alice', 'bob']) };
+  const map = new Map([['sarah chen', { mentionCount: 50, coEntities: {} }]]);
+  const result = entityMentionScore(chunk, ['sarah chen'], map);
+  assert(result === 0, `chunk not mentioning query entity should be 0, got ${result}`);
+}
+
+console.log('Test 28: score() — entityMention signal respects profile weight');
+{
+  const base = {
+    confidence: 1.0,
+    created_at: new Date().toISOString(),
+    chunk_type: 'fact',
+    file_weight: 1.0,
+    _normalizedFts: 0.5,
+    entities: JSON.stringify(['sarah chen']),
+    content: 'Sarah Chen is the lead engineer.',
+  };
+  const entityMap = new Map([['sarah chen', { mentionCount: 20, coEntities: {} }]]);
+  const overrides = { queryEntities: ['sarah chen'], entityIndexMap: entityMap };
+
+  // Default RECALL_PROFILE has entityMention=0 → no boost
+  const baseline = score(base, nowMs, RECALL_PROFILE, overrides);
+  // Profile with entityMention weight → boost applied
+  const boostedProfile = { ...RECALL_PROFILE, entityMention: 0.20 };
+  const boosted = score(base, nowMs, boostedProfile, overrides);
+  assert(boosted > baseline, `entityMention weight should boost: boosted=${boosted.toFixed(3)} vs baseline=${baseline.toFixed(3)}`);
+
+  // No regression: calling without overrides should match baseline exactly
+  const noOverrides = score(base, nowMs, RECALL_PROFILE);
+  assert(Math.abs(noOverrides - baseline) < 1e-9, `No-override path should equal zero-weight path`);
+}
+
 // ─── Summary ───
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);
