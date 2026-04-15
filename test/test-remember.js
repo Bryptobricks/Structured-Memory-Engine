@@ -32,6 +32,10 @@ function createDb(workspace) {
   try { db.exec('ALTER TABLE chunks ADD COLUMN access_count INTEGER DEFAULT 0'); } catch (_) {}
   try { db.exec('ALTER TABLE chunks ADD COLUMN last_accessed TEXT'); } catch (_) {}
   try { db.exec('ALTER TABLE chunks ADD COLUMN stale INTEGER DEFAULT 0'); } catch (_) {}
+  try { db.exec("ALTER TABLE chunks ADD COLUMN memory_tier TEXT DEFAULT 'working_reference'"); } catch (_) {}
+  try { db.exec('ALTER TABLE chunks ADD COLUMN recall_count INTEGER DEFAULT 0'); } catch (_) {}
+  try { db.exec('ALTER TABLE chunks ADD COLUMN unique_query_count INTEGER DEFAULT 0'); } catch (_) {}
+  try { db.exec("ALTER TABLE chunks ADD COLUMN query_hash_seen TEXT DEFAULT '[]'"); } catch (_) {}
   try {
     db.exec('DROP TRIGGER IF EXISTS chunks_au');
     db.exec(`CREATE TRIGGER IF NOT EXISTS chunks_au AFTER UPDATE OF content, heading, entities ON chunks BEGIN
