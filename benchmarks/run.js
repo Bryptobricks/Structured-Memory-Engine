@@ -266,12 +266,13 @@ function run() {
       'action items from last meeting',
     ];
 
-    // Warmup run
-    for (const q of queries) recall(db, q, { limit: 5 });
+    // Warmup run — recordStats: false so benchmark iterations don't write
+    // to recall_count / query_hash_seen on every measurement.
+    for (const q of queries) recall(db, q, { limit: 5, recordStats: false });
 
     const queryTimes = [];
     for (const q of queries) {
-      const t = time(() => recall(db, q, { limit: 5 }), 5);
+      const t = time(() => recall(db, q, { limit: 5, recordStats: false }), 5);
       queryTimes.push(t);
     }
     const queryAvg = queryTimes.reduce((s, t) => s + t.avg, 0) / queryTimes.length;

@@ -19,6 +19,41 @@ console.log('Test 1: Acknowledgments are gated');
     `"thanks!" should be acknowledgment, got reason=${thanksExclaim.reason}`);
 }
 
+console.log('Test 1b: Compound acknowledgments — spec Query 6 regression');
+{
+  // These compound acks used to slip through the monolithic ^...$ regex because
+  // the middle comma/space broke the anchor. Fixed via tokenized isAllAckWords.
+  const compoundAcks = [
+    'thanks, got it',      // spec Query 6
+    'ok cool thanks',
+    'thank you!',
+    'got it, thanks',
+    'yes thanks',
+    'ok got it',
+    'cool, thanks!',
+    'noted, thanks',
+    'perfect, thank you',
+  ];
+  for (const ack of compoundAcks) {
+    const r = shouldRecall(ack);
+    assert(r.shouldRecall === false && r.reason === 'acknowledgment',
+      `"${ack}" should be gated as compound ack, got shouldRecall=${r.shouldRecall} reason=${r.reason}`);
+  }
+
+  // Negative cases: messages that LOOK ack-ish but contain a content word
+  const notAcks = [
+    'thanks for the update on the redis migration',
+    'got it working finally',  // "working" is content
+    'ok but what about the auth module',  // "but" is content
+    'yes i need help with this',  // "need" and "help" are content
+  ];
+  for (const msg of notAcks) {
+    const r = shouldRecall(msg);
+    assert(r.shouldRecall === true,
+      `"${msg}" should pass gate (has content words), got gated: ${r.reason}`);
+  }
+}
+
 console.log('Test 2: Math expressions are gated');
 {
   const cases = ['2 + 2', '100 * 0.5', '1+1=2', '3.14 * 2', '50%'];
