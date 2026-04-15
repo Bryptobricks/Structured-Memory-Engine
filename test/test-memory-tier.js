@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const {
-  classifyTier, checkPromotion, applyTierMultiplier,
+  classifyTier, checkPromotion,
   TIER_MULTIPLIERS, PROMOTION_RULES, TYPE_FAST_PATHS,
 } = require('../lib/memory-tier');
 
@@ -88,13 +88,12 @@ console.log('Test 6: checkPromotion — thresholds');
   assert(checkPromotion(alreadyDurable) === null, 'durable_project has no further promotion');
 }
 
-console.log('Test 7: applyTierMultiplier');
+console.log('Test 7: TIER_MULTIPLIERS values');
 {
-  assert(applyTierMultiplier(1.0, 'durable_personal') === 1.0, 'durable_personal = 1.0x');
-  assert(applyTierMultiplier(1.0, 'working_reference') === 0.75, 'working_reference = 0.75x');
-  assert(applyTierMultiplier(1.0, 'ops_runbook') === 0.45, 'ops_runbook = 0.45x');
-  assert(applyTierMultiplier(1.0, 'unknown_tier') === 0.75, 'unknown tier defaults to working_reference');
-  assert(applyTierMultiplier(1.0, null) === 0.75, 'null tier defaults to working_reference');
+  assert(TIER_MULTIPLIERS.durable_personal === 1.0, 'durable_personal = 1.0x');
+  assert(TIER_MULTIPLIERS.durable_project === 1.0, 'durable_project = 1.0x');
+  assert(TIER_MULTIPLIERS.working_reference === 0.75, 'working_reference = 0.75x');
+  assert(TIER_MULTIPLIERS.ops_runbook === 0.45, 'ops_runbook = 0.45x');
 }
 
 console.log('Test 8: score() — tier multiplier suppresses ops_runbook');

@@ -117,19 +117,27 @@ console.log('Test 8: all strategy profiles are registered in scoring.PROFILES');
 
 console.log('Test 9: resolveProfile returns correct profile for strategies');
 {
+  // Strategy profiles use the additive redesign: base weights identical to
+  // the default profile, with ONE strategy-specific knob added.
   const entityBrief = resolveProfile('entity_brief', false);
   assert(entityBrief.entityMention > 0,
-    `entity_brief profile should have entityMention > 0, got ${entityBrief.entityMention}`);
-  assert(entityBrief.entity > 0.15,
-    `entity_brief profile should have elevated entity weight, got ${entityBrief.entity}`);
+    `entity_brief profile should have entityMention > 0 (strategy knob), got ${entityBrief.entityMention}`);
+  assert(entityBrief.fts >= 0.50,
+    `entity_brief should preserve fts weight (not cut it), got ${entityBrief.fts}`);
 
   const verification = resolveProfile('verification_lookup', false);
-  assert(verification.fts >= 0.45,
-    `verification_lookup profile should have high fts weight, got ${verification.fts}`);
+  assert(verification.confidenceExponent > 1.0,
+    `verification_lookup should have elevated confidenceExponent (strategy knob), got ${verification.confidenceExponent}`);
+  assert(verification.recencyHalfLifeDays >= 180,
+    `verification_lookup should have long recency half-life (strategy knob), got ${verification.recencyHalfLifeDays}`);
 
   const timeline = resolveProfile('timeline_brief', false);
-  assert(timeline.recency >= 0.35,
-    `timeline_brief profile should have high recency weight, got ${timeline.recency}`);
+  assert(timeline.recencyHalfLifeDays <= 60,
+    `timeline_brief should have short recency half-life (strategy knob), got ${timeline.recencyHalfLifeDays}`);
+
+  const relationship = resolveProfile('relationship_brief', false);
+  assert(relationship.entityMention > 0,
+    `relationship_brief should have entityMention weight (strategy knob), got ${relationship.entityMention}`);
 
   // Semantic variants
   const entityBriefSem = resolveProfile('entity_brief', true);

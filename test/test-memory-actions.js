@@ -165,7 +165,7 @@ console.log('Test 7: resolveTarget — ambiguous query raises AmbiguousTargetErr
 {
   const ws = tmpWs();
   const db = openDb(ws);
-  // Two near-identical chunks — ambiguous resolution
+  // Two identical chunks in different files — unambiguously ambiguous
   insertChunks(db, 'memory/v1.md', Date.now(), [
     { content: 'gateway listens on port 3000 in development', heading: null, lineStart: 1, lineEnd: 1, entities: [], chunkType: 'fact' },
   ], null);
@@ -176,13 +176,61 @@ console.log('Test 7: resolveTarget — ambiguous query raises AmbiguousTargetErr
   let err = null;
   try { resolveTarget(db, 'gateway port 3000', { workspace: ws }); }
   catch (e) { err = e; }
+  // This is the whole point of the ambiguity check — if it passes "maybe it's
+  // TargetNotFound that's fine", the actual ambiguity code path is untested.
+  assert(err instanceof AmbiguousTargetError,
+    `expected AmbiguousTargetError for identical-content collision, got ${err && err.name}: ${err && err.message}`);
   if (err instanceof AmbiguousTargetError) {
-    passed++;
     assert(err.candidates.length >= 2, `candidates surfaced: ${err.candidates.length}`);
-  } else {
-    // Could also be TargetNotFound if recall didn't match at all — acceptable fallback
-    assert(err != null, `expected error, got success`);
+    assert(err.candidates[0].content.includes('gateway'), 'candidate content preserved');
+    assert(err.candidates[0].score > 0, 'candidate has a score');
+    assert(err.candidates[0].id != null, 'candidate has an id');
   }
+  db.close();
+  fs.rmSync(ws, { recursive: true });
+}
+
+console.log('Test 7b: resolveTarget — weak match returns TargetNotFoundError');
+{
+  const ws = tmpWs();
+  const db = openDb(ws);
+  // Corpus has nothing remotely matching the target query
+  insertChunks(db, 'memory/x.md', Date.now(), [
+    { content: 'completely unrelated fact about databases', heading: null, lineStart: 1, lineEnd: 1, entities: [], chunkType: 'fact' },
+  ], null);
+
+  let err = null;
+  try { resolveTarget(db, 'quantum mechanics wavefunction collapse', { workspace: ws }); }
+  catch (e) { err = e; }
+  assert(err instanceof TargetNotFoundError,
+    `expected TargetNotFoundError for off-topic query, got ${err && err.name}`);
+  db.close();
+  fs.rmSync(ws, { recursive: true });
+}
+
+console.log('Test 7c: update/replace re-extract entities from new content');
+{
+  const ws = tmpWs();
+  const db = openDb(ws);
+  insertChunks(db, 'memory/test.md', Date.now(), [
+    { content: 'Notes about the auth module mentioning @oldapp', heading: null, lineStart: 1, lineEnd: 1, entities: ['@oldapp'], chunkType: 'raw' },
+  ], null);
+  const before = db.prepare('SELECT * FROM chunks LIMIT 1').get();
+
+  // Update to content with new @mention — extractEntities picks up @mentions, **bold**, acronyms
+  executeAction(db, { action: 'update', target: before.id, content: '@Nexus is now the new auth provider replacing @oldapp' });
+  const afterUpdate = db.prepare('SELECT entities FROM chunks WHERE id = ?').get(before.id);
+  const updatedEntities = JSON.parse(afterUpdate.entities);
+  assert(updatedEntities.includes('@Nexus'),
+    `update should re-extract @Nexus; got ${JSON.stringify(updatedEntities)}`);
+
+  // Replace: new chunk should have new-content entities, not old chunk's entities
+  const replaceRes = executeAction(db, { action: 'replace', target: before.id, content: 'Content mentions @Echelon and **ProjectX**' });
+  const newRow = db.prepare('SELECT entities FROM chunks WHERE id = ?').get(replaceRes.newId);
+  const newEntities = JSON.parse(newRow.entities);
+  assert(newEntities.includes('@Echelon'), `replace should extract @Echelon; got ${JSON.stringify(newEntities)}`);
+  assert(newEntities.includes('ProjectX'), `replace should extract **ProjectX**; got ${JSON.stringify(newEntities)}`);
+  assert(!newEntities.includes('@oldapp'), `replace should NOT carry forward old entities; got ${JSON.stringify(newEntities)}`);
   db.close();
   fs.rmSync(ws, { recursive: true });
 }
