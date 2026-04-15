@@ -229,6 +229,9 @@ console.log('Test 10: CIL pipeline logs automatically');
   try { db.exec('ALTER TABLE chunks ADD COLUMN recall_count INTEGER DEFAULT 0'); } catch (_) {}
   try { db.exec('ALTER TABLE chunks ADD COLUMN unique_query_count INTEGER DEFAULT 0'); } catch (_) {}
   try { db.exec("ALTER TABLE chunks ADD COLUMN query_hash_seen TEXT DEFAULT '[]'"); } catch (_) {}
+  try { db.exec('ALTER TABLE chunks ADD COLUMN protected INTEGER DEFAULT 0'); } catch (_) {}
+  try { db.exec('ALTER TABLE chunks ADD COLUMN superseded_by INTEGER'); } catch (_) {}
+  try { db.exec('ALTER TABLE chunks ADD COLUMN archived_at TEXT'); } catch (_) {}
 
   const now = new Date().toISOString();
   db.prepare(`INSERT INTO chunks (file_path, heading, content, line_start, line_end, entities, chunk_type, confidence, created_at, indexed_at, file_weight, stale)
