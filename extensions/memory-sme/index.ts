@@ -10,6 +10,8 @@ import { Type } from "@sinclair/typebox";
 import { createRequire } from "module";
 import { readFileSync } from "fs";
 import { resolve } from "path";
+import { registerCompactionAutoLogger } from "./hooks/compaction-auto-logger.js";
+import { registerToolResultCompressor } from "./hooks/tool-result-compressor.js";
 
 const require = createRequire(import.meta.url);
 
@@ -76,7 +78,10 @@ const memoryPlugin = {
   description: "Structured Memory Engine — FTS5, confidence scoring, entity graph, contradiction detection",
   kind: "memory" as const,
 
-  async register(api: any) {
+  // OpenClaw v2026.4+ requires register() to be synchronous. Tool/hook/service
+  // wiring is sync; long-running startup work (indexing, reflect) runs as
+  // fire-and-forget promises so registration returns immediately.
+  register(api: any) {
     const cfg = api.pluginConfig ?? {};
     const workspace = cfg.workspace ?? api.resolvePath?.(".") ?? process.cwd();
     const autoIndex = cfg.autoIndex !== false;
@@ -89,32 +94,35 @@ const memoryPlugin = {
     const sme = require("structured-memory-engine");
     const engine = sme.create({ workspace });
 
-    // Auto-index on startup (engine.index() is async in SME v7+)
+    // Auto-index on startup — fire-and-forget so register() stays synchronous
     if (autoIndex) {
-      try {
-        const result = await engine.index();
-        api.logger?.info?.(`memory-sme: indexed ${result.indexed} files (${result.total} total)`);
-      } catch (err: any) {
-        api.logger?.warn?.(`memory-sme: index failed: ${String(err)}`);
-      }
+      Promise.resolve()
+        .then(() => engine.index())
+        .then((result: any) => {
+          api.logger?.info?.(`memory-sme: indexed ${result.indexed} files (${result.total} total)`);
+        })
+        .catch((err: any) => {
+          api.logger?.warn?.(`memory-sme: index failed: ${String(err)}`);
+        });
     }
 
-    // Auto-reflect on startup (once per day max, unless disabled via config)
-    try {
-      const { loadConfig } = require("structured-memory-engine/lib/config");
-      const smeConfig = loadConfig(workspace);
-      const autoReflect = smeConfig?.reflect?.autoReflect !== false;
-      if (!autoReflect) throw new Error("disabled by config");
-      const { getLastReflectTime } = require("structured-memory-engine/lib/reflect");
-      const lastReflect = getLastReflectTime(workspace);
-      const hoursSince = (Date.now() - lastReflect) / (1000 * 60 * 60);
-      if (hoursSince >= 24) {
+    // Auto-reflect on startup (once per day max) — also fire-and-forget
+    Promise.resolve()
+      .then(async () => {
+        const { loadConfig } = require("structured-memory-engine/lib/config");
+        const smeConfig = loadConfig(workspace);
+        const autoReflect = smeConfig?.reflect?.autoReflect !== false;
+        if (!autoReflect) throw new Error("disabled by config");
+        const { getLastReflectTime } = require("structured-memory-engine/lib/reflect");
+        const lastReflect = getLastReflectTime(workspace);
+        const hoursSince = (Date.now() - lastReflect) / (1000 * 60 * 60);
+        if (hoursSince < 24) return;
         const result = await engine.reflect();
         api.logger?.info?.(`memory-sme: auto-reflect complete (decay: ${result.decay?.decayed ?? 0}, stale: ${result.stale?.marked ?? 0})`);
-      }
-    } catch (err: any) {
-      api.logger?.debug?.(`memory-sme: auto-reflect skipped: ${String(err)}`);
-    }
+      })
+      .catch((err: any) => {
+        api.logger?.debug?.(`memory-sme: auto-reflect skipped: ${String(err)}`);
+      });
 
     api.logger?.info?.(`memory-sme: plugin registered (workspace: ${workspace}, autoRecall: ${autoRecall}, autoCapture: ${autoCapture})`);
 
@@ -342,6 +350,16 @@ const memoryPlugin = {
         }
       });
     }
+
+    // --- Hook: Compaction Auto-Logger ---
+    // Writes a timestamped entry to memory/LIVE.md after each compaction.
+    // Bridges LCM (within-session) with SME (cross-session) — LIVE.md is indexed by SME.
+    registerCompactionAutoLogger(api, workspace);
+
+    // --- Hook: Tool Result Compressor ---
+    // Strips ANSI, npm noise, box-drawing chars; truncates >8K tool results.
+    // Reduces ~5-10% context waste from verbose CLI/tool output.
+    registerToolResultCompressor(api);
 
     // --- Service (cleanup on shutdown) ---
     api.registerService({
