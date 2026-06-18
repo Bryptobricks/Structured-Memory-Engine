@@ -10,6 +10,8 @@ import { Type } from "@sinclair/typebox";
 import { createRequire } from "module";
 import { readFileSync } from "fs";
 import { resolve } from "path";
+import { registerCompactionAutoLogger } from "./hooks/compaction-auto-logger.js";
+import { registerToolResultCompressor } from "./hooks/tool-result-compressor.js";
 
 const require = createRequire(import.meta.url);
 
@@ -342,6 +344,16 @@ const memoryPlugin = {
         }
       });
     }
+
+    // --- Hook: Compaction Auto-Logger ---
+    // Writes a timestamped entry to memory/LIVE.md after each compaction.
+    // Bridges LCM (within-session) with SME (cross-session) — LIVE.md is indexed by SME.
+    registerCompactionAutoLogger(api, workspace);
+
+    // --- Hook: Tool Result Compressor ---
+    // Strips ANSI, npm noise, box-drawing chars; truncates >8K tool results.
+    // Reduces ~5-10% context waste from verbose CLI/tool output.
+    registerToolResultCompressor(api);
 
     // --- Service (cleanup on shutdown) ---
     api.registerService({

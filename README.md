@@ -635,9 +635,186 @@ sme promote [--limit N] [--dry-run]
 npm test  # 30 suites, 1,451 tests
 ```
 
+## Full Memory Architecture (Recommended Stack)
+
+SME solves cross-session recall. But a production AI agent needs more than that — it needs context to survive within-session compaction, and it needs the transcript to stay lean so the context budget lasts. Here's the three-layer stack that covers all three concerns:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│               LAYER 3 — CONTEXT HYGIENE                 │
+│        Tool Result Compressor (built into SME)          │
+│  Strips ANSI / npm noise / box-drawing / truncates >8K  │
+│            Saves ~5-10% context budget/session           │
+└───────────────────────┬─────────────────────────────────┘
+                        │ feeds clean tool output into
+┌───────────────────────▼─────────────────────────────────┐
+│              LAYER 2 — WITHIN-SESSION MEMORY            │
+│         lossless-claw (LCM) — OpenClaw plugin           │
+│   DAG-based conversation summarization + lcm_expand     │
+│      Nothing truncated — drill down on any summary      │
+└───────────────────────┬─────────────────────────────────┘
+                        │ on compaction → writes to LIVE.md
+┌───────────────────────▼─────────────────────────────────┐
+│             LAYER 1 — CROSS-SESSION MEMORY              │
+│         SME (Structured Memory Engine) ← YOU ARE HERE   │
+│   FTS5 recall + confidence scoring + entity graph       │
+│   LIVE.md indexed → compaction history always recall-   │
+│   able even after gateway restart                       │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Why these three layers?
+
+| Layer | What it solves | What it doesn't solve |
+|-------|---------------|----------------------|
+| **SME** | Cross-session amnesia — agent forgets everything on restart | Context size grows unbounded within a session |
+| **LCM** | Within-session compaction — agent loses early conversation | Can't recall knowledge from last week |
+| **Compressor** | Verbose tool output burns through context budget | Doesn't help with information that's actually needed |
+
+They are **orthogonal, not competing**. Install all three for full coverage.
+
+### The Compaction Bridge
+
+The Compaction Auto-Logger hook is the key that makes SME + LCM work together:
+
+1. LCM detects context pressure → runs DAG-based compaction
+2. `after_compaction` fires → Auto-Logger writes timestamped stats to `memory/LIVE.md`
+3. SME indexes LIVE.md on the next turn
+4. Even after a gateway restart, the agent can recall "at 3:47pm there was a compaction — 47 messages removed, 12,000 tokens freed" — and can use `lcm_expand` to drill into the summarized content
+
+Without this bridge, compaction is invisible to long-term memory. The agent knows things were compressed but not when, what, or how much. With the bridge, compaction events are first-class memory entries.
+
+### Recommended Setup
+
+**1. Install SME**
+```bash
+npm install -g structured-memory-engine
+```
+
+Add to OpenClaw as a plugin (see [OpenClaw Plugin](#openclaw-drop-in-plugin) section above).
+
+**2. Install lossless-claw**
+```bash
+openclaw plugins install @martian-engineering/lossless-claw
+```
+
+Or manually:
+```bash
+git clone https://github.com/Martian-Engineering/lossless-claw /tmp/lossless-claw
+mkdir -p ~/.openclaw/extensions/lossless-claw
+cp -r /tmp/lossless-claw/* ~/.openclaw/extensions/lossless-claw/
+cd ~/.openclaw/extensions/lossless-claw && npm install
+```
+
+**3. Configure both plugins in `openclaw.json`**
+```json5
+{
+  plugins: {
+    allow: ["memory-sme", "lossless-claw"],
+    load: {
+      paths: [
+        "/path/to/Structured-Memory-Engine/extensions",
+        "~/.openclaw/extensions/lossless-claw"
+      ]
+    },
+    slots: {
+      memory: "memory-sme",
+      contextEngine: "lossless-claw"
+    },
+    entries: {
+      "memory-sme": {
+        enabled: true,
+        config: {
+          workspace: "/path/to/your/workspace",
+          autoRecall: true,
+          autoRecallMaxTokens: 2000,
+          autoCapture: false,
+          autoIndex: true
+        }
+      },
+      "lossless-claw": {
+        enabled: true,
+        config: {
+          freshTailCount: 32,
+          contextThreshold: 0.75,
+          summaryModel: "anthropic/claude-sonnet-4-6",
+          summaryProvider: "anthropic"
+        }
+      }
+    }
+  }
+}
+```
+
+**4. The two hooks are bundled into SME v8.3.0+**
+
+Both hooks register automatically when the `memory-sme` plugin loads — no additional configuration needed. You'll see these log lines on gateway start:
+
+```
+memory-sme: compaction-auto-logger registered (target: /workspace/memory/LIVE.md)
+memory-sme: tool-result-compressor registered
+```
+
+**5. Verify**
+
+After your first compaction, check:
+```bash
+cat /path/to/workspace/memory/LIVE.md
+```
+
+You should see a `## Compaction Log` section with a timestamped entry. That entry is now indexed by SME and will surface in auto-recall.
+
+### Architecture Notes
+
+- **LCM `summaryModel`**: Use a capable model — summaries that elide important details undermine the drill-down value of `lcm_expand`. `claude-sonnet-4-6` is the recommended minimum.
+- **LCM `freshTailCount: 32`**: Protects the 32 most recent messages from compaction. Increase for longer "working memory" at the cost of higher token usage.
+- **LCM `contextThreshold: 0.75`**: Triggers compaction when context hits 75% of window. Lower = more frequent compaction = leaner context; higher = fewer interruptions.
+- **SME `autoRecallMaxTokens: 2000`**: With LCM handling within-session context, you can safely use a higher recall budget. LCM compresses old turns, freeing headroom for SME recall injection.
+- **Compressor `MAX_CHARS: 8000`**: Tool results over 8K are almost never fully read by the model. The compressor truncates cleanly with an explicit marker rather than letting the context engine truncate arbitrarily mid-sentence.
+
+## Plugin Hooks (for contributors)
+
+SME v8.3.0+ ships two OpenClaw plugin hooks that register automatically:
+
+### Compaction Auto-Logger (`after_compaction`)
+
+**File:** `extensions/memory-sme/hooks/compaction-auto-logger.ts`
+
+Fires after each LCM (or native) compaction. Appends a timestamped markdown entry to `memory/LIVE.md` in the workspace, keeping a rolling window of 5 entries.
+
+```markdown
+## Compaction Log
+
+### Compaction — 2026-03-17T02:31:00.000Z
+- **Messages after:** 28
+- **Compacted:** 47 messages removed
+- **Tokens:** 68,421 → 14,203 (saved 54,218, 79%)
+- **Summary length:** 3,847 chars
+```
+
+This file is indexed by SME, making compaction history durable across restarts and queryable via `memory_search`.
+
+### Tool Result Compressor (`tool_result_persist`)
+
+**File:** `extensions/memory-sme/hooks/tool-result-compressor.ts`
+
+Synchronous hook (as required by OpenClaw) that runs on every tool result before it's written to the session transcript. Strips:
+- ANSI escape sequences
+- npm/pip/node warning lines
+- Box-drawing characters
+- Excessive blank lines
+
+Truncates at 8,000 chars with an explicit `[Truncated: X chars removed]` marker.
+
+**Zero-risk design**: any error returns `undefined`, leaving the original message unchanged. The hook never throws, never blocks.
+
+Credit: Hook designs by [Don](https://github.com/defi69don) (@defi69don / @clawdbotg_bot).
+
 ## Acknowledgments
 
 - [Gigabrain](https://github.com/legendaryvibecoder/gigabrain) by [@legendaryvibecoder](https://github.com/legendaryvibecoder) — A fellow OpenClaw memory plugin that inspired several v7.3 features including quality gates, semantic deduplication with type-aware thresholds, and heuristic classification. Their architecture around policy-driven value scoring and plausibility heuristics continues to inform SME's roadmap.
+- [lossless-claw](https://github.com/Martian-Engineering/lossless-claw) by [Martian Engineering](https://martian.engineering) — DAG-based context management plugin for OpenClaw. Recommended companion to SME for full within-session + cross-session memory coverage.
+- Don (@defi69don / @clawdbotg_bot) — Compaction Auto-Logger and Tool Result Compressor hook designs. First to identify and document the SME + LCM complementary architecture pattern.
 
 ## License
 
